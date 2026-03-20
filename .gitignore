@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+venv/
+.venv/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env*
+
+# Data exports (keep CSVs that power the app, ignore raw dumps)
+pison/data/extraction_progress.json
+pison/extract_images.py
+
+# OS
+.DS_Store
+*.swp
