@@ -1,0 +1,235 @@
+{
+  "whoop": {
+    "hrv_ms": {
+      "label": "HRV (ms)",
+      "sparring": {
+        "mean": 61.375,
+        "ci_lo": 54.38,
+        "ci_hi": 71.14,
+        "n": 8
+      },
+      "non_sparring": {
+        "mean": 65.375,
+        "ci_lo": 63.43,
+        "ci_hi": 67.35,
+        "n": 72
+      },
+      "mw_u": 182.0,
+      "p_value": 0.0904,
+      "significant": false
+    },
+    "recovery_pct": {
+      "label": "Recovery %",
+      "sparring": {
+        "mean": 52.125,
+        "ci_lo": 42.25,
+        "ci_hi": 63.64,
+        "n": 8
+      },
+      "non_sparring": {
+        "mean": 65.264,
+        "ci_lo": 61.88,
+        "ci_hi": 68.62,
+        "n": 72
+      },
+      "mw_u": 164.0,
+      "p_value": 0.0475,
+      "significant": true
+    },
+    "rhr_bpm": {
+      "label": "RHR (bpm)",
+      "sparring": {
+        "mean": 49.625,
+        "ci_lo": 48.0,
+        "ci_hi": 51.0,
+        "n": 8
+      },
+      "non_sparring": {
+        "mean": 48.583,
+        "ci_lo": 48.14,
+        "ci_hi": 49.01,
+        "n": 72
+      },
+      "mw_u": 372.5,
+      "p_value": 0.1729,
+      "significant": false
+    },
+    "sleep_perf_pct": {
+      "label": "Sleep Score %",
+      "sparring": {
+        "mean": 87.375,
+        "ci_lo": 85.88,
+        "ci_hi": 89.0,
+        "n": 8
+      },
+      "non_sparring": {
+        "mean": 85.403,
+        "ci_lo": 84.57,
+        "ci_hi": 86.29,
+        "n": 72
+      },
+      "mw_u": 384.0,
+      "p_value": 0.1237,
+      "significant": false
+    },
+    "strain": {
+      "label": "Strain",
+      "sparring": {
+        "mean": 14.838,
+        "ci_lo": 13.76,
+        "ci_hi": 15.99,
+        "n": 8
+      },
+      "non_sparring": {
+        "mean": 13.094,
+        "ci_lo": 12.19,
+        "ci_hi": 13.97,
+        "n": 70
+      },
+      "mw_u": 331.0,
+      "p_value": 0.4055,
+      "significant": false
+    },
+    "rem_pct": {
+      "label": "REM %",
+      "sparring": {
+        "mean": 23.938,
+        "ci_lo": 22.03,
+        "ci_hi": 25.89,
+        "n": 8
+      },
+      "non_sparring": {
+        "mean": 23.964,
+        "ci_lo": 23.31,
+        "ci_hi": 24.59,
+        "n": 72
+      },
+      "mw_u": 292.5,
+      "p_value": 0.9488,
+      "significant": false
+    },
+    "deep_pct": {
+      "label": "Deep Sleep %",
+      "sparring": {
+        "mean": 24.875,
+        "ci_lo": 23.06,
+        "ci_hi": 26.38,
+        "n": 8
+      },
+      "non_sparring": {
+        "mean": 24.944,
+        "ci_lo": 23.93,
+        "ci_hi": 25.98,
+        "n": 72
+      },
+      "mw_u": 315.0,
+      "p_value": 0.6708,
+      "significant": false
+    }
+  },
+  "pison": {
+    "readiness_ms": {
+      "label": "Readiness (ms)",
+      "sparring": {
+        "mean": 153.917,
+        "ci_lo": 150.0,
+        "ci_hi": 159.25,
+        "n": 6
+      },
+      "non_sparring": {
+        "mean": 158.147,
+        "ci_lo": 152.61,
+        "ci_hi": 164.77,
+        "n": 17
+      },
+      "mw_u": 46.0,
+      "p_value": 0.7519,
+      "significant": false
+    },
+    "agility": {
+      "label": "Agility (/100)",
+      "sparring": {
+        "mean": 74.083,
+        "ci_lo": 70.75,
+        "ci_hi": 76.83,
+        "n": 6
+      },
+      "non_sparring": {
+        "mean": 72.789,
+        "ci_lo": 69.68,
+        "ci_hi": 75.66,
+        "n": 19
+      },
+      "mw_u": 61.0,
+      "p_value": 0.8234,
+      "significant": false
+    }
+  },
+  "eeg": {
+    "alpha_theta_ratio": {
+      "label": "Alpha/Theta Ratio",
+      "sparring": {
+        "mean": 0.6543,
+        "ci_lo": null,
+        "ci_hi": null,
+        "n": 1
+      },
+      "non_sparring": {
+        "mean": 0.6857,
+        "ci_lo": 0.4,
+        "ci_hi": 0.97,
+        "n": 3
+      },
+      "insufficient_n": true
+    },
+    "rel_alpha_eo": {
+      "label": "Rel. Alpha EO",
+      "sparring": {
+        "mean": 0.1106,
+        "ci_lo": null,
+        "ci_hi": null,
+        "n": 1
+      },
+      "non_sparring": {
+        "mean": 0.1232,
+        "ci_lo": 0.07,
+        "ci_hi": 0.18,
+        "n": 3
+      },
+      "insufficient_n": true
+    },
+    "rel_theta_eo": {
+      "label": "Rel. Theta EO",
+      "sparring": {
+        "mean": 0.169,
+        "ci_lo": null,
+        "ci_hi": null,
+        "n": 1
+      },
+      "non_sparring": {
+        "mean": 0.1659,
+        "ci_lo": 0.14,
+        "ci_hi": 0.19,
+        "n": 3
+      },
+      "insufficient_n": true
+    },
+    "sef90": {
+      "label": "SEF90 (Hz)",
+      "sparring": {
+        "mean": 37.4792,
+        "ci_lo": null,
+        "ci_hi": null,
+        "n": 1
+      },
+      "non_sparring": {
+        "mean": 33.4097,
+        "ci_lo": 29.4,
+        "ci_hi": 37.42,
+        "n": 3
+      },
+      "insufficient_n": true
+    }
+  },
+  "eeg_n_note": "EEG: n=1 sparring, n=3 non-sparring sessions \u2014 interpret with caution"
+}

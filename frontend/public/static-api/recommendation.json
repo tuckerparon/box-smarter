@@ -1,0 +1,29 @@
+{
+  "recommendation": "OK to spar \u2014 metrics are within healthy range",
+  "sessions_allowed": 2,
+  "confidence": 95,
+  "overall_score": 98.4,
+  "flags": [],
+  "domain_scores": {
+    "hrv": 91.2,
+    "recovery": 100,
+    "rhr": 98.7,
+    "emg": 98.5,
+    "eeg": 100
+  },
+  "last7_averages": {
+    "hrv_ms": 59.7,
+    "recovery_pct": 69.0,
+    "rhr_bpm": 49.3
+  },
+  "baselines": {
+    "hrv_ms": 65.5,
+    "recovery_pct": 63.5,
+    "rhr_bpm": 48.6
+  },
+  "thresholds": {
+    "recovery_red_zone": 33.0,
+    "hrv_decline_pct": 15.0,
+    "rhr_rise_pct": 10
+  }
+}

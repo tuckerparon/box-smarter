@@ -4,7 +4,20 @@
  */
 import { useState, useEffect } from 'react'
 
-const BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000') + '/api'
+// In production, pre-rendered static JSON is served from /static-api/*.json
+// Locally, the live FastAPI server on :8000 is used instead.
+const IS_STATIC = !import.meta.env.DEV && !import.meta.env.VITE_API_URL
+const BASE = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL + '/api'
+  : import.meta.env.DEV
+    ? 'http://localhost:8000/api'
+    : '/static-api'
+
+function endpoint(path) {
+  // path e.g. "analysis/ab-sparring"
+  const slug = path.split('/').pop()
+  return IS_STATIC ? `${BASE}/${slug}.json` : `${BASE}/${path}`
+}
 
 async function fetchJson(url) {
   const r = await fetch(url)
@@ -19,11 +32,11 @@ export function useDashboardData() {
 
   useEffect(() => {
     Promise.all([
-      fetchJson(`${BASE}/analysis/ab-sparring`),
-      fetchJson(`${BASE}/analysis/pre-post-delta`),
-      fetchJson(`${BASE}/analysis/longitudinal`),
-      fetchJson(`${BASE}/analysis/neuroprotective`),
-      fetchJson(`${BASE}/analysis/recommendation`),
+      fetchJson(endpoint('analysis/ab-sparring')),
+      fetchJson(endpoint('analysis/pre-post-delta')),
+      fetchJson(endpoint('analysis/longitudinal')),
+      fetchJson(endpoint('analysis/neuroprotective')),
+      fetchJson(endpoint('analysis/recommendation')),
     ])
       .then(([abSparring, prePostDelta, longitudinal, neuroprotective, recommendation]) => {
         setData({ abSparring, prePostDelta, longitudinal, neuroprotective, recommendation })

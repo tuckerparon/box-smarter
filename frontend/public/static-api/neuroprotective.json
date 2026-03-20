@@ -1,0 +1,200 @@
+{
+  "caffeine": {
+    "hrv_ms": {
+      "without": {
+        "mean": 65.1,
+        "ci_lo": 63.01,
+        "ci_hi": 67.24,
+        "n": 78
+      },
+      "with": {
+        "mean": 60.0,
+        "ci_lo": 52.0,
+        "ci_hi": 68.0,
+        "n": 2
+      },
+      "p_value": 0.6,
+      "significant": false
+    },
+    "recovery_pct": {
+      "without": {
+        "mean": 64.03,
+        "ci_lo": 60.45,
+        "ci_hi": 67.45,
+        "n": 78
+      },
+      "with": {
+        "mean": 61.0,
+        "ci_lo": 46.0,
+        "ci_hi": 76.0,
+        "n": 2
+      },
+      "p_value": 0.8412,
+      "significant": false
+    },
+    "rhr_bpm": {
+      "without": {
+        "mean": 48.69,
+        "ci_lo": 48.27,
+        "ci_hi": 49.13,
+        "n": 78
+      },
+      "with": {
+        "mean": 48.5,
+        "ci_lo": 47.0,
+        "ci_hi": 50.0,
+        "n": 2
+      },
+      "p_value": 0.8638,
+      "significant": false
+    },
+    "sleep_perf_pct": {
+      "without": {
+        "mean": 85.59,
+        "ci_lo": 84.78,
+        "ci_hi": 86.37,
+        "n": 78
+      },
+      "with": {
+        "mean": 86.0,
+        "ci_lo": 84.0,
+        "ci_hi": 88.0,
+        "n": 2
+      },
+      "p_value": 0.8769,
+      "significant": false
+    },
+    "readiness_ms": {
+      "without": {
+        "mean": 158.93,
+        "ci_lo": 154.13,
+        "ci_hi": 164.52,
+        "n": 23
+      },
+      "with": {
+        "mean": 147.25,
+        "ci_lo": 142.5,
+        "ci_hi": 152.0,
+        "n": 2
+      },
+      "p_value": 0.2452,
+      "significant": false
+    },
+    "alpha_theta_ratio": {
+      "without": {
+        "mean": 0.77,
+        "ci_lo": 0.51,
+        "ci_hi": 1.03,
+        "n": 2
+      },
+      "with": {
+        "mean": 0.65,
+        "ci_lo": 0.65,
+        "ci_hi": 0.65,
+        "n": 1
+      }
+    }
+  },
+  "creatine": {
+    "hrv_ms": {
+      "without": {
+        "mean": 67.45,
+        "ci_lo": 65.0,
+        "ci_hi": 70.0,
+        "n": 51
+      },
+      "with": {
+        "mean": 60.62,
+        "ci_lo": 57.93,
+        "ci_hi": 63.38,
+        "n": 29
+      },
+      "p_value": 0.0116,
+      "significant": true
+    },
+    "recovery_pct": {
+      "without": {
+        "mean": 66.53,
+        "ci_lo": 62.49,
+        "ci_hi": 70.76,
+        "n": 51
+      },
+      "with": {
+        "mean": 59.41,
+        "ci_lo": 53.52,
+        "ci_hi": 64.76,
+        "n": 29
+      },
+      "p_value": 0.0916,
+      "significant": false
+    },
+    "rhr_bpm": {
+      "without": {
+        "mean": 48.69,
+        "ci_lo": 48.18,
+        "ci_hi": 49.27,
+        "n": 51
+      },
+      "with": {
+        "mean": 48.69,
+        "ci_lo": 48.0,
+        "ci_hi": 49.41,
+        "n": 29
+      },
+      "p_value": 0.9113,
+      "significant": false
+    },
+    "sleep_perf_pct": {
+      "without": {
+        "mean": 85.57,
+        "ci_lo": 84.49,
+        "ci_hi": 86.59,
+        "n": 51
+      },
+      "with": {
+        "mean": 85.66,
+        "ci_lo": 84.45,
+        "ci_hi": 86.9,
+        "n": 29
+      },
+      "p_value": 0.5099,
+      "significant": false
+    },
+    "readiness_ms": {
+      "without": {
+        "mean": 158.35,
+        "ci_lo": 154.58,
+        "ci_hi": 162.03,
+        "n": 17
+      },
+      "with": {
+        "mean": 157.25,
+        "ci_lo": 147.37,
+        "ci_hi": 171.0,
+        "n": 8
+      },
+      "p_value": 0.2642,
+      "significant": false
+    },
+    "alpha_theta_ratio": {
+      "without": {
+        "mean": null,
+        "ci_lo": null,
+        "ci_hi": null,
+        "n": 0
+      },
+      "with": {
+        "mean": 0.73,
+        "ci_lo": 0.56,
+        "ci_hi": 0.9,
+        "n": 3
+      }
+    }
+  },
+  "creatine_cumulative_hrv_correlation": {
+    "r": -0.324,
+    "p_value": 0.0033,
+    "n": 80,
+    "interpretation": "Negative correlation: more cumulative creatine days associated with lower HRV"
+  }
+}

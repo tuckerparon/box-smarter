@@ -1,0 +1,105 @@
+{
+  "readiness": {
+    "boxing": {
+      "mean": -3.86,
+      "n": 7,
+      "values": [
+        -14.0,
+        -14.0,
+        -7.0,
+        -7.0,
+        -5.0,
+        7.0,
+        13.0
+      ]
+    },
+    "sparring": {
+      "mean": 4.5,
+      "n": 4,
+      "values": [
+        -10.0,
+        10.0,
+        10.0,
+        8.0
+      ]
+    },
+    "mw_u": 20.0,
+    "p_value": 0.1477,
+    "hypothesis": "sparring delta > boxing delta"
+  },
+  "agility": {
+    "boxing": {
+      "mean": 3.8,
+      "n": 5,
+      "values": [
+        5.0,
+        5.0,
+        4.0,
+        3.0,
+        2.0
+      ]
+    },
+    "sparring": {
+      "mean": -5.33,
+      "n": 3,
+      "values": [
+        -4.0,
+        -7.0,
+        -5.0
+      ]
+    },
+    "mw_u": 0.0,
+    "p_value": 0.9918,
+    "hypothesis": "sparring delta > boxing delta"
+  },
+  "eeg": {
+    "alpha_theta_ratio": {
+      "label": "Alpha/Theta Ratio",
+      "higher_better": true,
+      "boxing": {
+        "mean": -0.7003,
+        "n": 1
+      },
+      "sparring": {
+        "mean": null,
+        "n": 0
+      }
+    },
+    "rel_alpha_eo": {
+      "label": "Rel. Alpha EO",
+      "higher_better": true,
+      "boxing": {
+        "mean": -0.1471,
+        "n": 1
+      },
+      "sparring": {
+        "mean": null,
+        "n": 0
+      }
+    },
+    "rel_theta_eo": {
+      "label": "Rel. Theta EO",
+      "higher_better": false,
+      "boxing": {
+        "mean": -0.0668,
+        "n": 1
+      },
+      "sparring": {
+        "mean": null,
+        "n": 0
+      }
+    },
+    "sef90": {
+      "label": "SEF90 (Hz)",
+      "higher_better": true,
+      "boxing": {
+        "mean": 2.8125,
+        "n": 1
+      },
+      "sparring": {
+        "mean": null,
+        "n": 0
+      }
+    }
+  }
+}
