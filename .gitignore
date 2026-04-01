@@ -20,3 +20,7 @@ pison/extract_images.py
 # OS
 .DS_Store
 *.swp
+
+# GCP credentials — never commit service account keys
+*-key.json
+service-account.json
