@@ -21,12 +21,11 @@ const BRANDS = [
   },
   {
     key: 'whoop',
-    logo: '/logos/whoop_logo.jpg',
+    logo: '/logos/whoop_logo.png',
     name: 'WHOOP',
     desc: 'Recovery · HRV · Sleep',
     accent: '#22c55e',
     logoStyle: {},
-    logoWrap: { background: '#fff', borderRadius: '4px', padding: '3px 8px', display: 'inline-flex' },
   },
   {
     key: 'oura',

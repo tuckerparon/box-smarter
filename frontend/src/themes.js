@@ -14,7 +14,7 @@ export const THEMES = {
     text: '#f5f5f5',
     subtext: '#737373',
     dimText: '#404040',
-    logo: '/logos/whoop_logo.jpg',
+    logo: '/logos/whoop_logo.png',
     fontFamily: 'Inter, system-ui, sans-serif',
   },
 
