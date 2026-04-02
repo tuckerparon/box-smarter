@@ -66,6 +66,8 @@ def _load_merged() -> pd.DataFrame:
 
 
 def _load_pison() -> pd.DataFrame:
+    if not PISON_CSV.exists():
+        return pd.DataFrame()
     df = pd.read_csv(PISON_CSV)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     return df

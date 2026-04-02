@@ -247,7 +247,7 @@ export default function Dashboard({ theme: t }) {
 
   if (error) return (
     <div style={{ background: t.bg }} className="min-h-screen flex items-center justify-center">
-      <p style={{ color: t.subtext }}>Failed to load — is the backend running on :8000?</p>
+      <p style={{ color: t.subtext }}>Could not load data. Check that the API is reachable.</p>
     </div>
   )
 

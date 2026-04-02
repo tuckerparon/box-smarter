@@ -15,6 +15,16 @@ CAMP_START = pd.Timestamp("2026-01-15").date()
 CAMP_END = pd.Timestamp("2026-05-07").date()
 
 
+def _empty_cycles() -> pd.DataFrame:
+    return pd.DataFrame(columns=["date","recovery_pct","rhr_bpm","hrv_ms",
+                                  "skin_temp_c","spo2_pct","strain","energy_kcal","max_hr","avg_hr"])
+
+def _empty_sleep() -> pd.DataFrame:
+    return pd.DataFrame(columns=["date","sleep_onset","wake_onset","sleep_perf_pct","asleep_min",
+                                  "in_bed_min","light_min","deep_min","rem_min","awake_min",
+                                  "sleep_need_min","sleep_debt_min","efficiency_pct","consistency_pct",
+                                  "respiratory_rpm","is_nap"])
+
 def load_cycles(camp_only: bool = True) -> pd.DataFrame:
     """
     Load physiological cycles with clean column names.
@@ -23,6 +33,8 @@ def load_cycles(camp_only: bool = True) -> pd.DataFrame:
     Columns: date, recovery_pct, rhr_bpm, hrv_ms, skin_temp_c, spo2_pct,
              strain, energy_kcal, max_hr, avg_hr
     """
+    if not (DATA_DIR / "physiological_cycles.csv").exists():
+        return _empty_cycles()
     df = pd.read_csv(DATA_DIR / "physiological_cycles.csv")
     df["date"] = pd.to_datetime(df["Cycle start time"]).dt.date
 
@@ -58,6 +70,8 @@ def load_sleep(camp_only: bool = True, naps: bool = False) -> pd.DataFrame:
              sleep_debt_min, efficiency_pct, consistency_pct,
              respiratory_rpm, is_nap
     """
+    if not (DATA_DIR / "sleeps.csv").exists():
+        return _empty_sleep()
     df = pd.read_csv(DATA_DIR / "sleeps.csv")
     df["date"] = pd.to_datetime(df["Cycle start time"]).dt.date
     df["sleep_onset"] = pd.to_datetime(df["Sleep onset"])

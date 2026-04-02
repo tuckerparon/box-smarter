@@ -31,6 +31,9 @@ def load_survey(filled_only: bool = True) -> pd.DataFrame:
       fought (Int64), head_contact_level (str|None), headache (Int64),
       creatine (Int64), caffeine (float|None)
     """
+    if not (DATA_DIR / "head_contact_study.csv").exists():
+        return pd.DataFrame(columns=["date","day_of_week","trained","sparred","fought",
+                                      "head_contact_level","headache","creatine","caffeine"])
     df = pd.read_csv(DATA_DIR / "head_contact_study.csv")
 
     df["date"] = pd.to_datetime(df["date"], format="%m/%d/%Y").dt.date
