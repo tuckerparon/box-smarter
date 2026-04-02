@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 // All possible Pison tags from CLAUDE.md
 const TAG_GROUPS = [

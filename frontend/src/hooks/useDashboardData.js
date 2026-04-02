@@ -4,19 +4,11 @@
  */
 import { useState, useEffect } from 'react'
 
-// In production, pre-rendered static JSON is served from /static-api/*.json
-// Locally, the live FastAPI server on :8000 is used instead.
-const IS_STATIC = !import.meta.env.DEV && !import.meta.env.VITE_API_URL
-const BASE = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL + '/api'
-  : import.meta.env.DEV
-    ? 'http://localhost:8000/api'
-    : '/static-api'
+// Dev: hit local FastAPI. Production: /api is proxied to Cloud Run via vercel.json.
+const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
 
 function endpoint(path) {
-  // path e.g. "analysis/ab-sparring"
-  const slug = path.split('/').pop()
-  return IS_STATIC ? `${BASE}/${slug}.json` : `${BASE}/${path}`
+  return `${BASE}/${path}`
 }
 
 async function fetchJson(url) {

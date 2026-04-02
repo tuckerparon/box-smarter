@@ -50,24 +50,37 @@ router = APIRouter()
 # Helpers
 # ---------------------------------------------------------------------------
 
+MERGED_COLS = ["date", "sparred", "hrv_ms", "recovery_pct", "rhr_bpm",
+               "sleep_perf_pct", "strain", "rem_pct", "deep_pct", "light_pct",
+               "head_contact_level", "creatine", "caffeine", "trained", "fought"]
+
 def _load_merged() -> pd.DataFrame:
-    """WHOOP cycles + sleep + survey joined on date."""
-    cycles = load_cycles()
-    sleep  = sleep_stage_pct(load_sleep())
-    survey = load_survey()
+    """WHOOP cycles + sleep + survey joined on date. Returns empty df if data files are absent."""
+    try:
+        cycles = load_cycles()
+        sleep  = sleep_stage_pct(load_sleep())
+        survey = load_survey()
 
-    cycles["date"] = pd.to_datetime(cycles["date"].astype(str))
-    sleep["date"]  = pd.to_datetime(sleep["date"].astype(str))
-    survey["date"] = pd.to_datetime(survey["date"].astype(str))
+        cycles["date"] = pd.to_datetime(cycles["date"].astype(str))
+        sleep["date"]  = pd.to_datetime(sleep["date"].astype(str))
+        survey["date"] = pd.to_datetime(survey["date"].astype(str))
 
-    df = cycles.merge(sleep, on="date", how="left")
-    df = df.merge(survey, on="date", how="left")
-    return df
+        df = cycles.merge(sleep, on="date", how="left")
+        df = df.merge(survey, on="date", how="left")
+        return df
+    except Exception as e:
+        print(f"[WARN] _load_merged failed: {e}")
+        return pd.DataFrame(columns=MERGED_COLS)
 
+
+PISON_COLS = ["source_image", "category", "date", "week_start", "week_end",
+              "summary_value", "summary_unit", "vs_baseline_pct", "vs_baseline_direction",
+              "reading_timestamp", "reading_value", "reading_unit",
+              "reading_vs_baseline_pct", "reading_vs_baseline_direction", "notes"]
 
 def _load_pison() -> pd.DataFrame:
     if not PISON_CSV.exists():
-        return pd.DataFrame()
+        return pd.DataFrame(columns=PISON_COLS)
     df = pd.read_csv(PISON_CSV)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     return df
@@ -104,7 +117,7 @@ def _group_stats(df, col, group_col):
 # ---------------------------------------------------------------------------
 
 @router.get("/ab-sparring")
-def get_ab_sparring():
+def get_ab_sparring():  # noqa: C901
     """
     Compare WHOOP + Pison + EEG metrics on sparring vs non-sparring days.
     Statistical test: Mann-Whitney U (non-parametric, appropriate for n<30).
@@ -216,6 +229,8 @@ def get_ab_sparring():
         "eeg":   eeg_results,
         "eeg_n_note": eeg_n_note,
     })
+
+
 
 
 # ---------------------------------------------------------------------------
