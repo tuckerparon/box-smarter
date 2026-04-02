@@ -15,9 +15,24 @@ const TAG_GROUPS = [
     exclusive: [['MIT', 'EBF', 'Home/Roseland', 'Harvard']],
   },
   {
-    label: 'Extras',
-    tags: ['Caffeine', 'Sitting', 'Standing'],
-    exclusive: [['Sitting', 'Standing']],
+    label: 'Positioning',
+    tags: ['Sitting', 'Standing', 'Left hand', 'Right hand', 'Arm rested on surface'],
+    exclusive: [['Sitting', 'Standing'], ['Left hand', 'Right hand']],
+  },
+  {
+    label: 'Nutrition',
+    tags: ['Pre-breakfast', 'Post-breakfast', 'Pre-lunch', 'Post-lunch', 'Pre-dunch', 'Post-dunch', 'Pre-dinner', 'Post-dinner'],
+    exclusive: [
+      ['Pre-breakfast', 'Post-breakfast'],
+      ['Pre-lunch', 'Post-lunch'],
+      ['Pre-dunch', 'Post-dunch'],
+      ['Pre-dinner', 'Post-dinner'],
+    ],
+  },
+  {
+    label: 'Supplements',
+    tags: ['Caffeine'],
+    exclusive: [],
   },
 ]
 
