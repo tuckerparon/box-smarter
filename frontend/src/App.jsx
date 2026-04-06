@@ -4,6 +4,7 @@ import Pison from './routes/Pison'
 import Neurable from './routes/Neurable'
 import Whoop from './routes/Whoop'
 import Oura from './routes/Oura'
+import Privacy from './routes/Privacy'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/neurable" element={<Neurable />} />
       <Route path="/whoop" element={<Whoop />} />
       <Route path="/oura" element={<Oura />} />
+      <Route path="/privacy" element={<Privacy />} />
     </Routes>
   )
 }
