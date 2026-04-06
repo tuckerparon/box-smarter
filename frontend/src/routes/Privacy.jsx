@@ -27,9 +27,9 @@ export default function Privacy() {
           Data Collection
         </h2>
         <p style={{ fontSize: '15px', lineHeight: 1.7, marginBottom: '24px' }}>
-          This application accesses data from WHOOP, Pison, and Neurable devices solely for the
-          personal use of the account owner. No data is shared with third parties or used for
-          any purpose other than personal health tracking and research.
+          This application accesses data from WHOOP solely for the personal use of the account
+          owner. No data is shared with third parties or used for any purpose other than personal
+          health tracking and research.
         </p>
 
         <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#f5f5f5', marginBottom: '12px' }}>
