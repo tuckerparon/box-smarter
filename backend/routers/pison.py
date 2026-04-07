@@ -1,4 +1,3 @@
-import csv
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -217,11 +216,13 @@ def log_pison(
     if not rows_to_write:
         raise HTTPException(status_code=422, detail="Provide at least one score value")
 
-    # ── Write to local CSV (keeps existing dashboard reads working) ──
-    with open(CSV_PATH, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
-        for row in rows_to_write:
-            writer.writerow(row)
+    # ── Write to local CSV if available (local dev only) ──
+    if CSV_PATH.exists():
+        import csv as _csv
+        with open(CSV_PATH, "a", newline="") as f:
+            writer = _csv.DictWriter(f, fieldnames=CSV_HEADERS)
+            for row in rows_to_write:
+                writer.writerow(row)
 
     # ── Write to BigQuery ──
     now = datetime.now(timezone.utc).isoformat()

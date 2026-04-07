@@ -1,5 +1,4 @@
 import re
-import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -74,12 +73,15 @@ async def upload_eeg(
     # Read file bytes once — needed for both local save and GCS upload
     data = await file.read()
 
-    # ── Save locally (keeps EEG pipeline working without GCS reads) ──
-    EEG_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(data)
-
-    # ── Upload to GCS ──
+    # ── Upload to GCS (primary — always runs) ──
     blob = bucket.blob(f"neurable/{filename}")
     blob.upload_from_string(data, content_type="text/csv")
+
+    # ── Save locally if path is writable (local dev only) ──
+    try:
+        EEG_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+    except (PermissionError, OSError):
+        pass
 
     return {"ok": True, "saved_as": filename, "gcs_path": f"gs://boxsmart-raw/neurable/{filename}"}
