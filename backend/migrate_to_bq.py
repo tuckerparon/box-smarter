@@ -60,7 +60,7 @@ def safe_int(v):
         return None
 
 
-def safe_date(v) -> str | None:
+def safe_date(v):
     if pd.isna(v) or v is None:
         return None
     try:
@@ -69,7 +69,7 @@ def safe_date(v) -> str | None:
         return None
 
 
-def parse_pison_ts(ts_str) -> str | None:
+def parse_pison_ts(ts_str):
     """Parse Pison timestamp like '9:15 am 04/01/2026' → ISO string."""
     if pd.isna(ts_str) or not str(ts_str).strip():
         return None
@@ -81,8 +81,15 @@ def parse_pison_ts(ts_str) -> str | None:
 
 # ── 1. Survey → training_log ───────────────────────────────────────────────────
 
-def migrate_survey():
+def migrate_survey(truncate: bool = True):
     print("\n[Survey → training_log]")
+
+    if truncate:
+        ref = f"{PROJECT}.{DATASET}.training_log"
+        print(f"  Truncating {ref} ...")
+        bq.query(f"DELETE FROM `{ref}` WHERE TRUE").result()
+        print("  Truncated.")
+
     df = load_survey(filled_only=True)
     rows = []
     for _, r in df.iterrows():
@@ -96,6 +103,7 @@ def migrate_survey():
             "headache":           safe_int(r.get("headache")),
             "creatine":           safe_int(r.get("creatine")),
             "caffeine":           safe_float(r.get("caffeine")),
+            "endurance":          safe_float(r.get("endurance")),
             "ingested_at":        NOW,
         })
     insert("training_log", rows, "survey")
@@ -224,12 +232,27 @@ def migrate_neurable():
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--only", choices=["survey", "pison", "whoop", "neurable"],
+                    help="Run only one migration step")
+    ap.add_argument("--no-truncate", action="store_true",
+                    help="Skip truncating training_log before survey migration")
+    args = ap.parse_args()
+
     print(f"Starting migration → {PROJECT}.{DATASET}")
     print(f"Timestamp: {NOW}\n")
 
-    migrate_survey()
-    migrate_pison()
-    migrate_whoop()
-    migrate_neurable()
+    only = args.only
+    truncate = not args.no_truncate
+
+    if only in (None, "survey"):
+        migrate_survey(truncate=truncate)
+    if only in (None, "pison"):
+        migrate_pison()
+    if only in (None, "whoop"):
+        migrate_whoop()
+    if only in (None, "neurable"):
+        migrate_neurable()
 
     print("\nMigration complete.")
