@@ -1,4 +1,3 @@
-import csv
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -9,14 +8,9 @@ from fastapi import APIRouter, Form, HTTPException
 sys.path.insert(0, str(Path(__file__).parents[1] / "processing"))
 from survey_loader import load_survey, weekly_contact_score, neuroprotective_summary
 from auth import verify_password
+from gcp import bq, DATASET
 
 router = APIRouter()
-
-SURVEY_CSV = Path(__file__).parents[2] / "survey" / "head_contact_study.csv"
-SURVEY_HEADERS = [
-    "date", "day_of_week", "trained", "sparred", "fought",
-    "head_contact_level", "headache", "creatine", "caffeine", "endurance",
-]
 
 
 @router.get("/")
@@ -55,7 +49,7 @@ def log_survey(
     caffeine: Optional[float] = Form(None),      # mg
     endurance: Optional[float] = Form(None),     # 1–5
 ):
-    """Append one survey row to head_contact_study.csv."""
+    """Append one training log row to BigQuery training_log table."""
     verify_password(password)
 
     try:
@@ -63,24 +57,22 @@ def log_survey(
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid date format; use YYYY-MM-DD")
 
-    day_of_week = dt.strftime("%A")
-    csv_date = dt.strftime("%m/%d/%Y")
-
-    row = {
-        "date": csv_date,
-        "day_of_week": day_of_week,
-        "trained": trained,
-        "sparred": sparred,
-        "fought": fought,
-        "head_contact_level": head_contact_level if head_contact_level != "None" else "N/A",
-        "headache": headache,
-        "creatine": creatine,
-        "caffeine": caffeine if caffeine is not None else "",
-        "endurance": endurance if endurance is not None else "N/A",
+    bq_row = {
+        "date":               log_date,
+        "day_of_week":        dt.strftime("%A"),
+        "trained":            trained,
+        "sparred":            sparred,
+        "fought":             fought,
+        "head_contact_level": head_contact_level if head_contact_level != "None" else None,
+        "headache":           headache,
+        "creatine":           creatine,
+        "caffeine":           caffeine,
+        "endurance":          endurance,
+        "ingested_at":        datetime.now(timezone.utc).isoformat(),
     }
 
-    with open(SURVEY_CSV, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=SURVEY_HEADERS)
-        writer.writerow(row)
+    errors = bq.insert_rows_json(f"{DATASET}.training_log", [bq_row])
+    if errors:
+        raise HTTPException(status_code=500, detail=f"BigQuery error: {errors}")
 
     return {"ok": True}
