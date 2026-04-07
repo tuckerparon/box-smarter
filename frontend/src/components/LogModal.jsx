@@ -201,14 +201,16 @@ function PisonSection({ password }) {
   const [logDate, setLogDate] = useState(today)
   const [logTime, setLogTime] = useState(nowTime)
   const [readiness, setReadiness] = useState('')
-  const [agility, setAgility] = useState('')
+  const [agilityScore, setAgilityScore] = useState('')
+  const [agilityMs, setAgilityMs] = useState('')
+  const [agilityAccuracy, setAgilityAccuracy] = useState('')
   const [tags, setTags] = useState([])
   const [status, setStatus] = useState(null) // null | 'loading' | 'ok' | 'error'
   const [errMsg, setErrMsg] = useState('')
 
   async function submit(e) {
     e.preventDefault()
-    if (!readiness && !agility) {
+    if (!readiness && !agilityScore && !agilityMs && !agilityAccuracy) {
       setErrMsg('Enter at least one score.')
       return
     }
@@ -220,14 +222,18 @@ function PisonSection({ password }) {
       fd.append('log_date', logDate)
       fd.append('log_time', logTime)
       if (readiness) fd.append('readiness_ms', readiness)
-      if (agility) fd.append('agility_score', agility)
+      if (agilityScore) fd.append('agility_score', agilityScore)
+      if (agilityMs) fd.append('agility_ms', agilityMs)
+      if (agilityAccuracy) fd.append('agility_accuracy', agilityAccuracy)
       fd.append('tags', tags.join(', '))
 
       const res = await fetch(`${API}/api/pison/log`, { method: 'POST', body: fd })
       if (res.ok) {
         setStatus('ok')
         setReadiness('')
-        setAgility('')
+        setAgilityScore('')
+        setAgilityMs('')
+        setAgilityAccuracy('')
         setTags([])
       } else {
         const j = await res.json().catch(() => ({}))
@@ -255,9 +261,10 @@ function PisonSection({ password }) {
       </div>
 
       {/* Scores */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+      <div>
+        <p style={{ ...S.label, marginBottom: '8px' }}>Readiness</p>
         <div>
-          <label style={S.label}>Readiness (ms)</label>
+          <label style={S.label}>Reaction Time (ms)</label>
           <input
             type="number"
             value={readiness}
@@ -267,22 +274,53 @@ function PisonSection({ password }) {
             step="0.1"
             style={S.input}
           />
-          <p style={{ fontSize: '10px', color: '#374151', marginTop: '3px' }}>Reaction time · lower = better</p>
+          <p style={{ fontSize: '10px', color: '#374151', marginTop: '3px' }}>Lower = better</p>
         </div>
-        <div>
-          <label style={S.label}>Agility (/100)</label>
-          <input
-            type="number"
-            value={agility}
-            onChange={e => setAgility(e.target.value)}
-            placeholder="e.g. 78"
-            min="0"
-            max="100"
-            step="0.1"
-            style={S.input}
-          />
-          <p style={{ fontSize: '10px', color: '#374151', marginTop: '3px' }}>Go/no-go · higher = better</p>
+      </div>
+
+      <div>
+        <p style={{ ...S.label, marginBottom: '8px' }}>Agility (Go/No-Go)</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+          <div>
+            <label style={S.label}>Score (/100)</label>
+            <input
+              type="number"
+              value={agilityScore}
+              onChange={e => setAgilityScore(e.target.value)}
+              placeholder="e.g. 78"
+              min="0"
+              max="100"
+              step="0.1"
+              style={S.input}
+            />
+          </div>
+          <div>
+            <label style={S.label}>Time (ms)</label>
+            <input
+              type="number"
+              value={agilityMs}
+              onChange={e => setAgilityMs(e.target.value)}
+              placeholder="e.g. 210"
+              min="0"
+              step="0.1"
+              style={S.input}
+            />
+          </div>
+          <div>
+            <label style={S.label}>Accuracy (%)</label>
+            <input
+              type="number"
+              value={agilityAccuracy}
+              onChange={e => setAgilityAccuracy(e.target.value)}
+              placeholder="e.g. 95"
+              min="0"
+              max="100"
+              step="0.1"
+              style={S.input}
+            />
+          </div>
         </div>
+        <p style={{ fontSize: '10px', color: '#374151', marginTop: '3px' }}>Higher score/accuracy = better · lower time = better</p>
       </div>
 
       {/* Tags */}
@@ -302,6 +340,159 @@ function PisonSection({ password }) {
         style={{ ...S.btn.primary, opacity: status === 'loading' ? 0.6 : 1 }}
       >
         {status === 'loading' ? 'Saving…' : 'Save Pison Reading'}
+      </button>
+    </form>
+  )
+}
+
+// ── Survey log section ─────────────────────────────────────────────────────────
+
+function SurveySection({ password }) {
+  const today = new Date().toISOString().slice(0, 10)
+
+  const [logDate, setLogDate] = useState(today)
+  const [trained, setTrained] = useState(0)
+  const [sparred, setSparred] = useState(0)
+  const [fought, setFought] = useState(0)
+  const [headContact, setHeadContact] = useState('None')
+  const [headache, setHeadache] = useState(0)
+  const [creatine, setCreatine] = useState(0)
+  const [caffeine, setCaffeine] = useState('')
+  const [endurance, setEndurance] = useState('')
+  const [status, setStatus] = useState(null)
+  const [errMsg, setErrMsg] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    setStatus('loading')
+    setErrMsg('')
+    try {
+      const fd = new FormData()
+      fd.append('password', password)
+      fd.append('log_date', logDate)
+      fd.append('trained', trained)
+      fd.append('sparred', sparred)
+      fd.append('fought', fought)
+      fd.append('head_contact_level', headContact)
+      fd.append('headache', headache)
+      fd.append('creatine', creatine)
+      if (caffeine !== '') fd.append('caffeine', caffeine)
+      if (endurance !== '') fd.append('endurance', endurance)
+
+      const res = await fetch(`${API}/api/survey/log`, { method: 'POST', body: fd })
+      if (res.ok) {
+        setStatus('ok')
+      } else {
+        const j = await res.json().catch(() => ({}))
+        setErrMsg(j.detail || 'Server error.')
+        setStatus('error')
+      }
+    } catch {
+      setErrMsg('Could not reach server.')
+      setStatus('error')
+    }
+  }
+
+  function Toggle({ label, value, onChange }) {
+    return (
+      <div>
+        <p style={S.label}>{label}</p>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {[0, 1].map(v => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => onChange(v)}
+              style={{
+                flex: 1, padding: '7px', borderRadius: '6px', border: 'none',
+                fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                background: value === v ? '#f5f5f5' : '#111111',
+                color: value === v ? '#080808' : '#6b7280',
+                transition: 'all 0.1s',
+              }}
+            >
+              {v === 0 ? 'No' : 'Yes'}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div>
+        <label style={S.label}>Date</label>
+        <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} style={S.input} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <Toggle label="Trained" value={trained} onChange={setTrained} />
+        <Toggle label="Sparred" value={sparred} onChange={setSparred} />
+        <Toggle label="Fought" value={fought} onChange={setFought} />
+        <Toggle label="Headache" value={headache} onChange={setHeadache} />
+        <Toggle label="Creatine (5g)" value={creatine} onChange={setCreatine} />
+      </div>
+
+      <div>
+        <p style={S.label}>Head Contact Level</p>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {['None', 'Low', 'Medium', 'High'].map(lvl => (
+            <button
+              key={lvl}
+              type="button"
+              onClick={() => setHeadContact(lvl)}
+              style={{
+                flex: 1, padding: '7px', borderRadius: '6px', border: 'none',
+                fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                background: headContact === lvl ? '#f5f5f5' : '#111111',
+                color: headContact === lvl ? '#080808' : '#6b7280',
+                transition: 'all 0.1s',
+              }}
+            >
+              {lvl}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div>
+          <label style={S.label}>Caffeine (mg)</label>
+          <input
+            type="number"
+            value={caffeine}
+            onChange={e => setCaffeine(e.target.value)}
+            placeholder="e.g. 200"
+            min="0"
+            step="1"
+            style={S.input}
+          />
+        </div>
+        <div>
+          <label style={S.label}>Endurance (1–5)</label>
+          <input
+            type="number"
+            value={endurance}
+            onChange={e => setEndurance(e.target.value)}
+            placeholder="e.g. 3"
+            min="1"
+            max="5"
+            step="0.5"
+            style={S.input}
+          />
+        </div>
+      </div>
+
+      {errMsg && <p style={{ color: '#ef4444', fontSize: '12px' }}>{errMsg}</p>}
+      {status === 'ok' && <p style={{ color: '#22c55e', fontSize: '12px' }}>Survey logged successfully.</p>}
+
+      <button
+        type="submit"
+        disabled={status === 'loading'}
+        style={{ ...S.btn.primary, opacity: status === 'loading' ? 0.6 : 1 }}
+      >
+        {status === 'loading' ? 'Saving…' : 'Save Survey Entry'}
       </button>
     </form>
   )
@@ -436,7 +627,7 @@ function NeurableSection({ password }) {
 
 export default function LogModal({ onClose }) {
   const [password, setPassword] = useState(null)
-  const [tab, setTab] = useState('pison') // 'pison' | 'neurable'
+  const [tab, setTab] = useState('survey') // 'survey' | 'pison' | 'neurable'
 
   return (
     <div
@@ -490,28 +681,26 @@ export default function LogModal({ onClose }) {
                 background: '#111111', padding: '4px', borderRadius: '8px',
               }}
             >
-              {['pison', 'neurable'].map(t => (
+              {[['survey', 'Survey'], ['pison', 'Pison'], ['neurable', 'Neurable EEG']].map(([t, label]) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
                   style={{
                     flex: 1, padding: '7px', borderRadius: '6px', border: 'none',
                     fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                    textTransform: 'capitalize',
                     background: tab === t ? '#f5f5f5' : 'transparent',
                     color: tab === t ? '#080808' : '#6b7280',
                     transition: 'all 0.1s',
                   }}
                 >
-                  {t === 'pison' ? 'Pison' : 'Neurable EEG'}
+                  {label}
                 </button>
               ))}
             </div>
 
-            {tab === 'pison'
-              ? <PisonSection password={password} />
-              : <NeurableSection password={password} />
-            }
+            {tab === 'survey' && <SurveySection password={password} />}
+            {tab === 'pison' && <PisonSection password={password} />}
+            {tab === 'neurable' && <NeurableSection password={password} />}
           </>
         )}
       </div>

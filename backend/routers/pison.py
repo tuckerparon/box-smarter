@@ -149,6 +149,8 @@ def log_pison(
     log_time: str = Form(...),       # HH:MM (24h)
     readiness_ms: Optional[float] = Form(None),
     agility_score: Optional[float] = Form(None),
+    agility_ms: Optional[float] = Form(None),
+    agility_accuracy: Optional[float] = Form(None),
     tags: str = Form(""),            # comma-separated tag string
 ):
     """
@@ -187,7 +189,13 @@ def log_pison(
             "notes": tags,
         })
 
-    if agility_score is not None:
+    has_agility = any(v is not None for v in [agility_score, agility_ms, agility_accuracy])
+    if has_agility:
+        agility_notes_parts = [tags] if tags else []
+        if agility_ms is not None:
+            agility_notes_parts.append(f"agility_ms={agility_ms}")
+        if agility_accuracy is not None:
+            agility_notes_parts.append(f"agility_accuracy={agility_accuracy}")
         rows_to_write.append({
             "source_image": "manual",
             "category": "daily_agility",
@@ -199,15 +207,15 @@ def log_pison(
             "vs_baseline_pct": "",
             "vs_baseline_direction": "",
             "reading_timestamp": timestamp_str,
-            "reading_value": agility_score,
+            "reading_value": agility_score if agility_score is not None else "",
             "reading_unit": "/100",
             "reading_vs_baseline_pct": "",
             "reading_vs_baseline_direction": "",
-            "notes": tags,
+            "notes": ", ".join(agility_notes_parts),
         })
 
     if not rows_to_write:
-        raise HTTPException(status_code=422, detail="Provide at least one of readiness_ms or agility_score")
+        raise HTTPException(status_code=422, detail="Provide at least one score value")
 
     # ── Write to local CSV (keeps existing dashboard reads working) ──
     with open(CSV_PATH, "a", newline="") as f:
@@ -217,19 +225,21 @@ def log_pison(
 
     # ── Write to BigQuery ──
     now = datetime.now(timezone.utc).isoformat()
-    bq_rows = []
-    for row in rows_to_write:
-        category = row["category"]  # daily_readiness | daily_agility
-        bq_rows.append({
-            "date": log_date,
-            "reading_ts": dt.replace(tzinfo=timezone.utc).isoformat(),
-            "category": category,
-            "value": row["reading_value"],
-            "unit": row["reading_unit"],
-            "tags": tags,
-            "source": "manual",
-            "ingested_at": now,
-        })
+    readiness_val = next((r["reading_value"] for r in rows_to_write if r["category"] == "daily_readiness"), None)
+    _agility_raw  = next((r["reading_value"] for r in rows_to_write if r["category"] == "daily_agility"), None)
+    agility_val   = _agility_raw if _agility_raw != "" else None
+
+    bq_rows = [{
+        "date":             log_date,
+        "datetime":         dt.isoformat(),
+        "readiness_ms":     readiness_val,
+        "agility_ms":       agility_ms,
+        "agility_accuracy": agility_accuracy,
+        "agility_score":    agility_val,
+        "tags":             tags,
+        "source":           "manual",
+        "ingested_at":      now,
+    }]
 
     errors = bq.insert_rows_json(f"{DATASET}.pison_readings", bq_rows)
     if errors:
