@@ -82,7 +82,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <a
-            href="https://www.hackh4h.com/"
+            href="https://haymakersforhope.org/events/boxing/rock-n-rumble-xv-boston-2026/fighters/tucker-paron"
             target="_blank"
             rel="noreferrer"
             className="text-sm px-4 py-1.5 rounded font-medium transition-opacity hover:opacity-70"
