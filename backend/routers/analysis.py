@@ -258,7 +258,6 @@ def get_ab_sparring():  # noqa: C901
     eeg_results = {}
     eeg_n_note = None
     if not eeg_df.empty:
-        eeg_df = eeg_df[eeg_df["poor_contact"] != True].copy()
         eeg_df["sparred"] = eeg_df["date"].isin(sparring_dates).astype(int)
         n_spar = int((eeg_df["sparred"] == 1).sum())
         n_nospar = int((eeg_df["sparred"] == 0).sum())
@@ -403,8 +402,6 @@ def get_pre_post_delta():
     eeg_raw = eeg_pipeline.process_all_sessions()
     eeg_out = {}
     if not eeg_raw.empty:
-        eeg_raw = eeg_raw[eeg_raw["poor_contact"] != True].copy()
-
         # Need sparring dates from survey
         merged = _load_merged()
         merged["date_dt"] = pd.to_datetime(merged["date"].astype(str))
@@ -511,7 +508,7 @@ def get_longitudinal():
     try:
         eeg_raw = eeg_pipeline.process_all_sessions()
         if not eeg_raw.empty:
-            eeg_valid = eeg_raw[eeg_raw["poor_contact"] != True].copy()
+            eeg_valid = eeg_raw.copy()
             eeg_valid["date_col"] = pd.to_datetime(eeg_valid["date"])
             eeg_valid["week_start"] = (
                 eeg_valid["date_col"] - pd.to_timedelta(eeg_valid["date_col"].dt.dayofweek, unit="D")
@@ -676,9 +673,7 @@ def get_correlation_matrix():
     eeg_raw = eeg_pipeline.process_all_sessions()
     eeg_cols = ["alpha_reactivity", "alpha_theta_ratio", "rel_alpha_eo", "rel_theta_eo"]
     if not eeg_raw.empty:
-        eeg_pre = eeg_raw[
-            (eeg_raw["timing"] == "pre") & (eeg_raw["poor_contact"] != True)
-        ].copy()
+        eeg_pre = eeg_raw[eeg_raw["timing"] == "pre"].copy()
         eeg_pre["date"] = eeg_pre["date"].astype(str)
         available = ["date"] + [c for c in eeg_cols if c in eeg_pre.columns]
         eeg_slim = eeg_pre[available].copy()

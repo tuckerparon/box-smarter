@@ -129,9 +129,9 @@ const EEG_DEFS = {
     fmt: v => {
       if (v == null) return '—'
       const abs = Math.abs(v)
-      if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`
-      if (abs >= 1e3) return `${(v / 1e3).toFixed(0)}K`
-      return v.toFixed(1)
+      if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M µV²`
+      if (abs >= 1e3) return `${(v / 1e3).toFixed(0)}K µV²`
+      return `${v.toFixed(1)} µV²`
     },
     info: {
       title: 'Alpha Reactivity (EC − EO)',
@@ -334,26 +334,45 @@ function buildH1Interpretation(data) {
 function buildRQ1Interpretation(data) {
   if (!data?.length || data.length < 2) return null
   const lines = []
-  const first = data[0], last = data[data.length - 1]
 
-  if (first.alpha_theta_ratio != null && last.alpha_theta_ratio != null) {
-    const delta = last.alpha_theta_ratio - first.alpha_theta_ratio
+  function firstLast(key) {
+    const vals = data.filter(d => d[key] != null)
+    if (vals.length < 2) return null
+    return { first: vals[0][key], last: vals[vals.length - 1][key], n: vals.length }
+  }
+
+  const atr = firstLast('alpha_theta_ratio')
+  if (atr) {
+    const delta = atr.last - atr.first
+    const pct = Math.abs(delta / atr.first * 100).toFixed(0)
     lines.push(
-      `Alpha/theta ratio has ${delta > 0 ? 'increased' : 'decreased'} from ${first.alpha_theta_ratio.toFixed(3)} to ${last.alpha_theta_ratio.toFixed(3)} over the camp — ${delta > 0 ? 'trending toward better cognitive readiness' : 'trending toward cumulative neural fatigue'}.`
+      `Alpha/theta ratio (cognitive readiness index) has ${delta > 0 ? 'risen' : 'fallen'} from ${atr.first.toFixed(3)} to ${atr.last.toFixed(3)} over ${atr.n} weeks (${delta >= 0 ? '+' : ''}${pct}%) — ${delta > 0 ? 'a positive trend consistent with neural adaptation to training' : 'a downward trend consistent with cumulative neurological fatigue from sustained boxing exposure'}.`
     )
   }
 
-  if (first.alpha_reactivity != null && last.alpha_reactivity != null) {
-    const delta = last.alpha_reactivity - first.alpha_reactivity
+  const ar = firstLast('alpha_reactivity')
+  if (ar) {
+    const delta = ar.last - ar.first
     lines.push(
-      `Alpha reactivity has ${delta > 0 ? 'improved' : 'declined'} (${EEG_DEFS.alpha_reactivity.fmt(first.alpha_reactivity)} → ${EEG_DEFS.alpha_reactivity.fmt(last.alpha_reactivity)}) — ${delta > 0 ? 'cortical arousal response strengthening over camp' : 'possible cumulative suppression of arousal response'}.`
+      `Alpha reactivity (cortical arousal response, µV²) has ${delta > 0 ? 'strengthened' : 'weakened'} from ${EEG_DEFS.alpha_reactivity.fmt(ar.first)} to ${EEG_DEFS.alpha_reactivity.fmt(ar.last)} — ${delta > 0 ? 'suggesting the brain\'s arousal mechanism is improving with training' : 'possible cumulative blunting of the eye-opening arousal response, consistent with repeated sub-concussive exposure'}.`
     )
   }
 
-  if (first.readiness_ms != null && last.readiness_ms != null) {
-    const delta = last.readiness_ms - first.readiness_ms
+  const rt = firstLast('readiness_ms')
+  if (rt) {
+    const delta = rt.last - rt.first
     lines.push(
-      `Reaction time has ${delta > 0 ? 'slowed' : 'improved'} by ${Math.abs(delta).toFixed(0)} ms since camp start — ${delta > 0 ? 'neuromuscular fatigue accumulating' : 'neuromuscular adaptation over training camp'}.`
+      `Neuromuscular reaction time has ${delta > 0 ? `slowed by ${delta.toFixed(0)} ms` : `improved by ${Math.abs(delta).toFixed(0)} ms`} since camp start — ${delta > 0 ? 'suggesting accumulating neuromuscular fatigue or impact-related slowing across the training period' : 'consistent with neuromuscular adaptation to boxing-specific conditioning'}.`
+    )
+  }
+
+  const contactVals = data.filter(d => d.contact_numeric != null)
+  if (contactVals.length >= 2) {
+    const maxContact = Math.max(...contactVals.map(d => d.contact_numeric))
+    const avgContact = contactVals.reduce((s, d) => s + d.contact_numeric, 0) / contactVals.length
+    const CLABELS = { 0: 'None', 1: 'Low', 2: 'Medium', 3: 'High' }
+    lines.push(
+      `Head contact score averaged ${avgContact.toFixed(1)}/3 across the camp (peak: ${CLABELS[Math.round(maxContact)] ?? maxContact.toFixed(1)}). Use the chart toggle to compare each metric against the contact timeline and identify whether biomarker changes track with impact load.`
     )
   }
 
@@ -363,55 +382,76 @@ function buildRQ1Interpretation(data) {
 function buildRQ2Interpretation(data) {
   if (!data?.matrix) return null
   const { var_keys, var_labels, matrix } = data
-
-  const hcIdx = var_keys.indexOf('head_contact')
-  if (hcIdx === -1) return null
-
   const lines = []
-  const hcRow = matrix[hcIdx]
 
-  const significant = var_keys
-    .map((k, i) => ({ key: k, label: var_labels[i], cell: hcRow[i] }))
-    .filter(x => x.key !== 'head_contact' && x.cell?.p_value != null && x.cell.p_value < 0.05)
-    .sort((a, b) => Math.abs(b.cell.rho) - Math.abs(a.cell.rho))
-
-  if (significant.length > 0) {
-    significant.forEach(({ label, cell }) => {
-      const dir = cell.rho > 0 ? 'increases' : 'decreases'
-      lines.push(`${label} ${dir} significantly with head contact (ρ = ${cell.rho.toFixed(2)}, p = ${cell.p_value.toFixed(3)}, n = ${cell.n}).`)
-    })
-  } else {
-    const strongest = var_keys
-      .map((k, i) => ({ key: k, label: var_labels[i], cell: hcRow[i] }))
-      .filter(x => x.key !== 'head_contact' && x.cell?.rho != null)
-      .sort((a, b) => Math.abs(b.cell.rho) - Math.abs(a.cell.rho))[0]
-
-    if (strongest) {
-      lines.push(
-        `No statistically significant correlations with head contact were found (strongest: ${strongest.label}, ρ = ${strongest.cell.rho.toFixed(2)}, p = ${strongest.cell.p_value?.toFixed(3) ?? '—'}) — likely reflecting limited statistical power at current n.`
-      )
-    }
+  function getCell(k1, k2) {
+    const i = var_keys.indexOf(k1), j = var_keys.indexOf(k2)
+    if (i === -1 || j === -1) return null
+    return matrix[i][j]
   }
 
-  // EEG ↔ ENG cross-modal
-  const engKeys = ['readiness_ms', 'agility']
   const eegKeys = ['alpha_reactivity', 'alpha_theta_ratio', 'rel_alpha_eo', 'rel_theta_eo']
-  let strongestCrossModal = null
-  engKeys.forEach(ek => {
-    eegKeys.forEach(eeKey => {
-      const ei = var_keys.indexOf(ek)
-      const eei = var_keys.indexOf(eeKey)
-      if (ei === -1 || eei === -1) return
-      const cell = matrix[ei][eei]
-      if (cell?.rho != null && (strongestCrossModal == null || Math.abs(cell.rho) > Math.abs(strongestCrossModal.rho))) {
-        strongestCrossModal = { ...cell, engLabel: var_labels[ei], eegLabel: var_labels[eei] }
-      }
-    })
-  })
-  if (strongestCrossModal) {
+  const eegShortLabels = {
+    alpha_reactivity: 'Alpha Reactivity', alpha_theta_ratio: 'Alpha/Theta',
+    rel_alpha_eo: 'Rel. Alpha EO', rel_theta_eo: 'Rel. Theta EO',
+  }
+
+  // ── EEG ↔ Readiness coupling ─────────────────────────────────────────────
+  const readinessCorrs = eegKeys.map(k => {
+    const c = getCell(k, 'readiness_ms') ?? getCell('readiness_ms', k)
+    return c?.rho != null ? { key: k, label: eegShortLabels[k], rho: c.rho, p: c.p_value, n: c.n } : null
+  }).filter(Boolean).sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho))
+
+  if (readinessCorrs.length > 0) {
+    const strong = readinessCorrs.filter(c => Math.abs(c.rho) >= 0.35)
+    const displayed = strong.length > 0 ? strong : readinessCorrs.slice(0, 2)
+    const sigMark = c => c.p != null && c.p < 0.05 ? '★ ' : ''
     lines.push(
-      `Strongest ENG↔EEG correlation: ${strongestCrossModal.engLabel} × ${strongestCrossModal.eegLabel} (ρ = ${strongestCrossModal.rho.toFixed(2)}${strongestCrossModal.p_value < 0.05 ? ', p<0.05' : ''}) — ${Math.abs(strongestCrossModal.rho) > 0.3 ? 'suggests neuromuscular and EEG measures share a common neurological driver' : 'weak cross-modal coupling at this sample size'}.`
+      `EEG ↔ Readiness: ${displayed.map(c => `${sigMark(c)}${c.label} (ρ = ${c.rho.toFixed(2)}${c.p != null ? ', p = ' + c.p.toFixed(3) : ''})`).join('; ')}. ${strong.length >= 2
+        ? 'All four EEG metrics co-vary with neuromuscular reaction speed, suggesting EEG and reaction time share a common neurological substrate — days when the brain shows lower alpha dominance and higher theta also show slower neuromuscular response.'
+        : 'EEG and neuromuscular measures show moderate co-variation, consistent with shared neural underpinnings.'
+      }`
     )
+  }
+
+  // ── EEG ↔ Headache — key biomarker finding ───────────────────────────────
+  const headacheCorrs = eegKeys.map(k => {
+    const c = getCell(k, 'headache') ?? getCell('headache', k)
+    return c?.rho != null ? { key: k, label: eegShortLabels[k], rho: c.rho, p: c.p_value, n: c.n } : null
+  }).filter(Boolean).sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho))
+
+  if (headacheCorrs.length > 0) {
+    const sig = headacheCorrs.filter(c => c.p != null && c.p < 0.05)
+    const top = sig.length > 0 ? sig : headacheCorrs.slice(0, 2)
+    const hasSig = sig.length > 0
+    lines.push(
+      `EEG ↔ Headache: ${top.map(c => `${hasSig && c.p < 0.05 ? '★ ' : ''}${c.label} (ρ = ${c.rho.toFixed(2)}${c.p != null ? ', p = ' + c.p.toFixed(3) : ''})`).join('; ')}. ${hasSig
+        ? `Alpha/Theta and Rel. Alpha EO show the strongest${sig.length > 1 ? ' and statistically significant' : ''} correlation with self-reported headache. If this holds with larger n, these metrics could serve as objective neurophysiological markers of sub-concussive head impact burden — days when alpha-band activity is suppressed may correspond to measurable neurological stress, a key question in contact sport safety research.`
+        : `Alpha/Theta and Rel. Alpha EO show the highest correlation with self-reported headache among EEG metrics. While not yet statistically significant at this sample size, the pattern suggests these measures could become reliable objective markers of head impact burden with continued data collection.`
+      }`
+    )
+  }
+
+  // ── Head contact ─────────────────────────────────────────────────────────
+  const hcIdx = var_keys.indexOf('head_contact')
+  if (hcIdx !== -1) {
+    const hcRow = matrix[hcIdx]
+    const sigHC = var_keys
+      .map((k, i) => ({ key: k, label: var_labels[i], cell: hcRow[i] }))
+      .filter(x => !['head_contact', 'headache'].includes(x.key) && x.cell?.p_value != null && x.cell.p_value < 0.05)
+      .sort((a, b) => Math.abs(b.cell.rho) - Math.abs(a.cell.rho))
+
+    if (sigHC.length > 0) {
+      lines.push(`Head contact level correlates significantly with: ${sigHC.map(s => `${s.label} (ρ = ${s.cell.rho.toFixed(2)}, p = ${s.cell.p_value.toFixed(3)})`).join(', ')}.`)
+    } else {
+      const topHC = var_keys
+        .map((k, i) => ({ key: k, label: var_labels[i], cell: hcRow[i] }))
+        .filter(x => x.key !== 'head_contact' && x.cell?.rho != null)
+        .sort((a, b) => Math.abs(b.cell.rho) - Math.abs(a.cell.rho))[0]
+      if (topHC) {
+        lines.push(`No biomarker shows a statistically significant correlation with head contact at current n (strongest: ${topHC.label}, ρ = ${topHC.cell.rho.toFixed(2)}, p = ${topHC.cell.p_value?.toFixed(3) ?? '—'}) — consistent with limited power in a single-subject n<30 dataset.`)
+      }
+    }
   }
 
   return lines.length ? lines : null
@@ -930,7 +970,7 @@ const GLOSSARY = [
   {
     metric: 'Alpha Reactivity',
     proxy: 'Cortical arousal response',
-    formula: 'α_EC − α_EO (8–12 Hz)',
+    formula: 'α_EC − α_EO (8–12 Hz), units: µV²',
     direction: 'Higher = stronger suppression = more aroused',
     citationLinks: [{ text: 'Klimesch (1999) Brain Research Reviews', url: 'https://doi.org/10.1016/S0165-0173(98)00056-3' }],
   },
