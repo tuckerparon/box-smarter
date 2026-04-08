@@ -279,7 +279,7 @@ export default function Home() {
       {/* ── CTA ── */}
       <section className="max-w-3xl mx-auto w-full px-8 pb-20 flex items-center gap-4">
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/results')}
           className="px-6 py-2.5 rounded text-sm font-semibold transition-opacity hover:opacity-80"
           style={{
             background: '#1A1A1A',

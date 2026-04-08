@@ -1,20 +1,20 @@
 import { Routes, Route } from 'react-router-dom'
 import Home from './routes/Home'
-import Pison from './routes/Pison'
-import Neurable from './routes/Neurable'
-import Whoop from './routes/Whoop'
-import Oura from './routes/Oura'
 import Privacy from './routes/Privacy'
+import Dashboard from './components/Dashboard'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/pison" element={<Pison />} />
-      <Route path="/neurable" element={<Neurable />} />
-      <Route path="/whoop" element={<Whoop />} />
-      <Route path="/oura" element={<Oura />} />
-      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/results"   element={<Dashboard />} />
+      <Route path="/privacy"   element={<Privacy />} />
+      {/* Legacy routes — redirect to /results */}
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/neurable"  element={<Dashboard />} />
+      <Route path="/pison"     element={<Dashboard />} />
+      <Route path="/whoop"     element={<Dashboard />} />
+      <Route path="/oura"      element={<Dashboard />} />
     </Routes>
   )
 }
