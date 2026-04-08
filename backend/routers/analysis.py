@@ -740,28 +740,37 @@ def get_correlation_matrix():
             delta_result = _spearman_matrix(df_d, DELTA_VARS)
 
     # ── Mode 2: Next-day pre-session ────────────────────────────────────────
+    # head_contact & headache from prev day; readiness/agility/EEG from next morning
     next_day_result = {}
     if not eeg_raw.empty:
         eeg_pre = eeg_raw[eeg_raw["timing"] == "pre"].copy()
-        eeg_pre["date_dt"]   = pd.to_datetime(eeg_pre["date"].astype(str))
-        eeg_pre["prev_date"] = (eeg_pre["date_dt"] - pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d")
-        avail_cols = ["prev_date"] + [c for c in eeg_cols if c in eeg_pre.columns]
-        eeg_pre_slim = eeg_pre[avail_cols].rename(columns={"prev_date": "date"})
-        eeg_pre_slim = eeg_pre_slim.groupby("date")[[c for c in eeg_cols if c in eeg_pre_slim.columns]].mean().reset_index()
+        eeg_pre["eeg_date"]  = pd.to_datetime(eeg_pre["date"].astype(str)).dt.strftime("%Y-%m-%d")
+        eeg_pre["prev_date"] = (pd.to_datetime(eeg_pre["date"].astype(str)) - pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d")
+        avail_eeg = [c for c in eeg_cols if c in eeg_pre.columns]
+        eeg_pre_slim = (
+            eeg_pre[["eeg_date", "prev_date"] + avail_eeg]
+            .groupby(["eeg_date", "prev_date"])[avail_eeg].mean().reset_index()
+        )
 
-        df_n = survey_slim.merge(readiness_daily, on="date", how="left")
-        df_n = df_n.merge(agility_daily,   on="date", how="left")
-        df_n = df_n.merge(eeg_pre_slim,    on="date", how="inner")
+        # prev-day head_contact + headache
+        survey_prev = survey_slim.rename(columns={"date": "prev_date"})
+        # next-morning Pison (eeg_date)
+        readiness_next = readiness_daily.rename(columns={"date": "eeg_date"})
+        agility_next   = agility_daily.rename(columns={"date": "eeg_date"})
+
+        df_n = eeg_pre_slim.merge(survey_prev,    on="prev_date", how="left")
+        df_n = df_n.merge(readiness_next, on="eeg_date", how="left")
+        df_n = df_n.merge(agility_next,   on="eeg_date", how="left")
 
         NEXT_VARS = [
             ("head_contact",      "Head Contact (prev day)"),
             ("headache",          "Headache (prev day)"),
-            ("readiness_ms",      "Readiness (prev day)"),
-            ("agility",           "Agility (prev day)"),
-            ("alpha_reactivity",  "Next-AM Alpha Reactivity"),
-            ("alpha_theta_ratio", "Next-AM Alpha/Theta"),
-            ("rel_alpha_eo",      "Next-AM Rel. Alpha EO"),
-            ("rel_theta_eo",      "Next-AM Rel. Theta EO"),
+            ("readiness_ms",      "Readiness"),
+            ("agility",           "Agility"),
+            ("alpha_reactivity",  "Alpha Reactivity"),
+            ("alpha_theta_ratio", "Alpha/Theta"),
+            ("rel_alpha_eo",      "Rel. Alpha EO"),
+            ("rel_theta_eo",      "Rel. Theta EO"),
         ]
         next_day_result = _spearman_matrix(df_n, NEXT_VARS)
 
