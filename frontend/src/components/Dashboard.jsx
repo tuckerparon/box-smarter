@@ -177,83 +177,72 @@ const EEG_DEFS = {
 
 // ─── Key Findings ─────────────────────────────────────────────────────────────
 
+function bold(s) { return `<strong>${s}</strong>` }
+
 function KeyFindings({ data }) {
   if (!data) return null
   const findings = []
 
-  // Alpha/Theta — delta (post − pre on sparring vs non-sparring days)
+  // Alpha/Theta — pre→post delta
   const atr = data.abSparring?.eeg?.alpha_theta_ratio
   const atrDeltaSp = atr?.delta_sparring?.mean
   const atrDeltaNs = atr?.delta_non_sparring?.mean
   if (atrDeltaSp != null && atrDeltaNs != null) {
-    const diff = atrDeltaSp - atrDeltaNs
-    findings.push({
-      label: 'Alpha/Theta Ratio — session delta (sparring vs non-sparring)',
-      value: `${diff >= 0 ? '+' : ''}${diff.toFixed(3)}`,
-      detail: `On sparring days, alpha/theta drops ${Math.abs(atrDeltaSp).toFixed(3)} on average from pre- to post-session (non-sparring: ${atrDeltaNs >= 0 ? '+' : ''}${atrDeltaNs.toFixed(3)}). This ratio measures how alert and cognitively sharp the brain is — a ${atrDeltaSp < 0 ? 'larger drop after sparring suggests head contact acutely suppresses cognitive readiness more than standard training' : 'similar or smaller drop after sparring — no differential suppression detected'}.`,
-      color: atrDeltaSp < atrDeltaNs ? T.accent : T.accent3,
-      sig: atr.significant,
+    const spStr = `${atrDeltaSp >= 0 ? '+' : ''}${atrDeltaSp.toFixed(3)}`
+    const nsStr = `${atrDeltaNs >= 0 ? '+' : ''}${atrDeltaNs.toFixed(3)}`
+    const supportsH1 = atrDeltaSp < atrDeltaNs
+    findings.push({ paragraph:
+      `The alpha/theta ratio — a measure of cognitive alertness — changed ${bold(spStr)} from pre to post on sparring days, versus ${bold(nsStr)} on non-sparring days. ${supportsH1
+        ? 'The larger drop on sparring days suggests head contact acutely suppresses cognitive readiness beyond what training fatigue alone produces.'
+        : 'No differential suppression of cognitive readiness was detected between session types.'
+      }`
     })
   } else if (atr?.sparring?.mean != null && atr?.non_sparring?.mean != null) {
-    // Fallback to avg if no delta data
     const sp = atr.sparring.mean, ns = atr.non_sparring.mean
-    const diff = sp - ns
-    findings.push({
-      label: 'Alpha/Theta Ratio — sparring vs non-sparring',
-      value: `${diff >= 0 ? '+' : ''}${diff.toFixed(3)}`,
-      detail: `${sp.toFixed(3)} on sparring days vs ${ns.toFixed(3)} on non-sparring days. A ${diff < 0 ? `${Math.abs(diff).toFixed(3)} lower ratio on sparring days suggests reduced cognitive readiness following head contact` : 'higher ratio on sparring days — no decline in cognitive readiness'}.`,
-      color: T.accent2,
-      sig: atr.significant,
+    findings.push({ paragraph:
+      `The alpha/theta ratio averaged ${bold(sp.toFixed(3))} on sparring days vs ${bold(ns.toFixed(3))} on non-sparring days — ${sp < ns ? 'lower on contact days, suggesting reduced cognitive readiness' : 'no meaningful difference between session types'}.`
     })
   }
 
-  // Alpha Reactivity — delta
+  // Alpha Reactivity — pre→post delta
   const ar = data.abSparring?.eeg?.alpha_reactivity
   const arDeltaSp = ar?.delta_sparring?.mean
   const arDeltaNs = ar?.delta_non_sparring?.mean
   if (arDeltaSp != null && arDeltaNs != null) {
-    const diff = arDeltaSp - arDeltaNs
-    findings.push({
-      label: 'Alpha Reactivity — session delta (sparring vs non-sparring)',
-      value: EEG_DEFS.alpha_reactivity.fmt(diff),
-      detail: `On sparring days, alpha reactivity changes by ${EEG_DEFS.alpha_reactivity.fmt(arDeltaSp)} from pre to post (non-sparring: ${EEG_DEFS.alpha_reactivity.fmt(arDeltaNs)}). When you open your eyes, a healthy brain suppresses alpha waves — signaling a shift into an alert state. A ${arDeltaSp < arDeltaNs ? 'larger decline on sparring days suggests the arousal mechanism is more blunted after head contact than after regular training' : 'similar change across session types — no differential arousal blunting'}.`,
-      color: arDeltaSp < arDeltaNs ? T.accent : T.accent3,
-      sig: ar.significant,
+    const spStr = EEG_DEFS.alpha_reactivity.fmt(arDeltaSp)
+    const nsStr = EEG_DEFS.alpha_reactivity.fmt(arDeltaNs)
+    const supportsH1 = arDeltaSp < arDeltaNs
+    findings.push({ paragraph:
+      `Alpha reactivity — the brain's eye-opening arousal response — shifted by ${bold(spStr)} on sparring days vs ${bold(nsStr)} on non-sparring days. ${supportsH1
+        ? 'A smaller gain after sparring suggests the cortical arousal mechanism is more blunted following head contact.'
+        : 'No differential change in cortical arousal response was detected.'
+      }`
     })
   } else if (ar?.sparring?.mean != null && ar?.non_sparring?.mean != null) {
     const sp = ar.sparring.mean, ns = ar.non_sparring.mean
-    const diff = sp - ns
-    findings.push({
-      label: 'Alpha Reactivity — sparring vs non-sparring',
-      value: EEG_DEFS.alpha_reactivity.fmt(diff),
-      detail: `${EEG_DEFS.alpha_reactivity.fmt(sp)} on sparring days vs ${EEG_DEFS.alpha_reactivity.fmt(ns)} on non-sparring days. ${diff < 0 ? 'Weaker cortical arousal response on contact days — consistent with H1.' : 'No differential suppression between session types.'}`,
-      color: diff < 0 ? T.accent : T.accent3,
-      sig: ar.significant,
+    findings.push({ paragraph:
+      `Alpha reactivity averaged ${bold(EEG_DEFS.alpha_reactivity.fmt(sp))} on sparring days vs ${bold(EEG_DEFS.alpha_reactivity.fmt(ns))} on non-sparring days.`
     })
   }
 
-  // Reaction Time — delta
+  // Reaction Time — pre→post delta
   const rt = data.abSparring?.pison?.readiness_ms
   const rtDeltaSp = rt?.delta_sparring?.mean
   const rtDeltaNs = rt?.delta_non_sparring?.mean
   if (rtDeltaSp != null && rtDeltaNs != null) {
-    const diff = rtDeltaSp - rtDeltaNs
-    findings.push({
-      label: 'Reaction Time — session delta (sparring vs non-sparring)',
-      value: `${diff >= 0 ? '+' : ''}${diff.toFixed(0)} ms`,
-      detail: `On sparring days, reaction time changes by ${rtDeltaSp >= 0 ? '+' : ''}${rtDeltaSp.toFixed(0)} ms from pre to post (non-sparring: ${rtDeltaNs >= 0 ? '+' : ''}${rtDeltaNs.toFixed(0)} ms). Reaction time measures how fast the nervous system responds to a stimulus. A ${rtDeltaSp > rtDeltaNs ? `${Math.abs(diff).toFixed(0)} ms greater slowing on sparring days points to elevated neuromuscular cost from head contact — even millisecond differences reflect real changes in neural processing speed` : 'similar or smaller change — no excess neuromuscular cost from sparring detected'}.`,
-      color: rtDeltaSp > rtDeltaNs ? T.accent : T.accent3,
-      sig: rt.significant,
+    const spStr = `${rtDeltaSp >= 0 ? '+' : ''}${rtDeltaSp.toFixed(0)} ms`
+    const nsStr = `${rtDeltaNs >= 0 ? '+' : ''}${rtDeltaNs.toFixed(0)} ms`
+    const supportsH1 = rtDeltaSp > rtDeltaNs
+    findings.push({ paragraph:
+      `Neuromuscular reaction time changed by ${bold(spStr)} on sparring days vs ${bold(nsStr)} on non-sparring days. ${supportsH1
+        ? 'The greater post-session slowing on sparring days reflects elevated neuromuscular cost from head contact — even small millisecond changes correspond to real differences in neural processing speed.'
+        : 'No excess neuromuscular slowing was detected after sparring compared to standard training.'
+      }`
     })
   } else if (rt?.sparring?.mean != null && rt?.non_sparring?.mean != null) {
     const sp = rt.sparring.mean, ns = rt.non_sparring.mean
-    const diff = sp - ns
-    findings.push({
-      label: 'Reaction Time — sparring vs non-sparring',
-      value: `${diff >= 0 ? '+' : ''}${diff.toFixed(0)} ms`,
-      detail: `${sp.toFixed(0)} ms on sparring days vs ${ns.toFixed(0)} ms on non-sparring days. ${diff > 0 ? `A ${diff.toFixed(0)} ms slower response on sparring days suggests elevated neuromuscular stress from head contact.` : 'No meaningful reaction time difference between session types.'}`,
-      color: diff > 0 ? T.accent : T.accent3,
-      sig: rt.significant,
+    findings.push({ paragraph:
+      `Reaction time averaged ${bold(sp.toFixed(0) + ' ms')} on sparring days vs ${bold(ns.toFixed(0) + ' ms')} on non-sparring days.`
     })
   }
 
@@ -261,30 +250,19 @@ function KeyFindings({ data }) {
 
   return (
     <Card className="p-5 mb-10">
-      <h2 className="text-xs uppercase tracking-widest mb-1" style={{ color: T.dimText, fontFamily: T.sans, letterSpacing: '0.1em' }}>
+      <p className="text-xs uppercase tracking-widest mb-3" style={{ color: T.dimText, fontFamily: T.sans, letterSpacing: '0.1em' }}>
         Key Findings
-      </h2>
-      <p className="text-xs mb-4" style={{ color: T.dimText, fontFamily: T.sans }}>
-        Pre→post session delta · sparring vs non-sparring days
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <p className="text-sm leading-relaxed" style={{ color: T.subtext, fontFamily: T.sans }}>
         {findings.map((f, i) => (
-          <div key={i} className="p-3 rounded"
-            style={{ background: T.bg, border: `1px solid ${T.border}`, borderLeft: `3px solid ${f.color}` }}>
-            <p className="text-xs mb-1" style={{ color: T.dimText, fontFamily: T.sans }}>
-              {f.label}
-              {f.sig && (
-                <span className="ml-2 px-1.5 py-0.5 rounded text-xs font-semibold"
-                  style={{ background: '#FEF3E2', color: '#9A4F00', fontFamily: T.sans, fontSize: '0.6rem' }}>
-                  p&lt;0.05
-                </span>
-              )}
-            </p>
-            <p className="text-2xl font-bold leading-none mb-1" style={{ color: f.color, fontFamily: T.serif }}>{f.value}</p>
-            <p className="text-xs" style={{ color: T.subtext, fontFamily: T.sans }}>{f.detail}</p>
-          </div>
+          <span key={i}>
+            {i > 0 && ' '}
+            <span dangerouslySetInnerHTML={{ __html: f.paragraph }} />
+            {i < findings.length - 1 && ' '}
+          </span>
         ))}
-      </div>
+        {' '}These patterns provide early directional support for H1, though statistical confidence is limited by small n and should be interpreted with caution.
+      </p>
     </Card>
   )
 }
