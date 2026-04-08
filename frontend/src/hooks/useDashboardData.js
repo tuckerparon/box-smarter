@@ -4,7 +4,6 @@
  */
 import { useState, useEffect } from 'react'
 
-// Dev: hit local FastAPI. Production: /api is proxied to Cloud Run via vercel.json.
 const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api'
 
 function endpoint(path) {
@@ -25,13 +24,11 @@ export function useDashboardData() {
   useEffect(() => {
     Promise.all([
       fetchJson(endpoint('analysis/ab-sparring')),
-      fetchJson(endpoint('analysis/pre-post-delta')),
       fetchJson(endpoint('analysis/longitudinal')),
-      fetchJson(endpoint('analysis/neuroprotective')),
-      fetchJson(endpoint('analysis/recommendation')),
+      fetchJson(endpoint('analysis/correlation-matrix')),
     ])
-      .then(([abSparring, prePostDelta, longitudinal, neuroprotective, recommendation]) => {
-        setData({ abSparring, prePostDelta, longitudinal, neuroprotective, recommendation })
+      .then(([abSparring, longitudinal, correlationMatrix]) => {
+        setData({ abSparring, longitudinal, correlationMatrix })
       })
       .catch(setError)
       .finally(() => setLoading(false))

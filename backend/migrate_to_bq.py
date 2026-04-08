@@ -175,10 +175,10 @@ def migrate_whoop():
     insert("whoop_daily", rows, "whoop")
 
 
-# ── 4. Neurable → GCS + eeg_sessions ─────────────────────────────────────────
+# ── 4. Neurable → GCS + neurable_readings ─────────────────────────────────────
 
 def migrate_neurable():
-    print("\n[Neurable → GCS + eeg_sessions]")
+    print("\n[Neurable → GCS + neurable_readings]")
     bucket = gcs.bucket(BUCKET)
     sessions = eeg_pipeline.list_sessions()
 
@@ -186,10 +186,26 @@ def migrate_neurable():
         print("  No EEG session files found — skipping")
         return
 
+    # Fetch already-ingested source files to avoid duplicates
+    existing_files = set()
+    try:
+        rows = bq.query(
+            f"SELECT DISTINCT source_file FROM `{PROJECT}.{DATASET}.neurable_readings`"
+        ).result()
+        existing_files = {row["source_file"] for row in rows}
+        if existing_files:
+            print(f"  [BQ] {len(existing_files)} files already ingested — will skip")
+    except Exception as e:
+        print(f"  [BQ] Could not fetch existing files: {e}")
+
     bq_rows = []
     for s in sessions:
         filepath: Path = s["filepath"]
         gcs_path = f"neurable/{filepath.name}"
+
+        if filepath.name in existing_files:
+            print(f"  [EEG] already in BQ, skipping: {filepath.name}")
+            continue
 
         # Upload raw CSV to GCS
         blob = bucket.blob(gcs_path)
@@ -226,7 +242,7 @@ def migrate_neurable():
         except Exception as e:
             print(f"  [EEG] skipped {filepath.name}: {e}")
 
-    insert("eeg_sessions", bq_rows, "neurable")
+    insert("neurable_readings", bq_rows, "neurable")
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────

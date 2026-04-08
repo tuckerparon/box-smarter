@@ -24,6 +24,7 @@ Frequency bands (normalized total: 1–45 Hz):
   beta  13–30 Hz
   gamma 30–45 Hz
 """
+import os
 import re
 from pathlib import Path
 from typing import Optional, Tuple
@@ -33,7 +34,41 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 
-DATA_DIR = Path(__file__).parents[2] / "neurable" / "data"
+# NumPy 2.0 renamed trapz → trapezoid; support both
+try:
+    _trapz = np.trapezoid
+except AttributeError:
+    _trapz = np.trapz
+
+# On Cloud Run the repo is read-only; download GCS files to /tmp instead.
+_LOCAL_DATA = Path(__file__).parents[2] / "neurable" / "data"
+_TMP_DATA   = Path("/tmp/neurable/data")
+DATA_DIR    = _TMP_DATA if os.getenv("K_SERVICE") else _LOCAL_DATA
+
+_FILENAME_RE = re.compile(r"^\d{8}_(pre|post)-boxing_[a-f0-9]{16}\.csv$", re.IGNORECASE)
+
+
+def _sync_from_gcs() -> None:
+    """
+    Download Neurable CSVs from GCS bucket (neurable/ prefix) into DATA_DIR.
+    Runs only when K_SERVICE env var is set (Cloud Run).
+    Skips files already present locally.
+    """
+    if not os.getenv("K_SERVICE"):
+        return
+    try:
+        from gcp import bucket  # type: ignore
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        for blob in bucket.list_blobs(prefix="neurable/"):
+            name = blob.name.split("/")[-1]
+            if not _FILENAME_RE.match(name):
+                continue
+            dest = DATA_DIR / name
+            if not dest.exists():
+                blob.download_to_filename(str(dest))
+                print(f"[eeg_pipeline] downloaded {name} from GCS")
+    except Exception as e:
+        print(f"[eeg_pipeline] GCS sync failed: {e}")
 FS       = 500   # Hz
 N_CH     = 12
 CHANNELS = [f"Ch{i}RawEEG" for i in range(1, N_CH + 1)]
@@ -64,6 +99,7 @@ def list_sessions():
       {date, timing, filepath}
     File naming: MMDDYYYY_(pre|post)-boxing_<id>.csv
     """
+    _sync_from_gcs()
     sessions = []
     pattern = re.compile(r"^(\d{8})_(pre|post)-boxing_")
     for path in sorted(DATA_DIR.glob("*.csv")):
@@ -219,7 +255,7 @@ def weighted_band_power(freqs: np.ndarray,
     Integrates PSD in [fmin, fmax] per channel, then takes weighted mean.
     """
     idx = (freqs >= fmin) & (freqs <= fmax)
-    per_ch = np.trapz(psd[idx], freqs[idx], axis=0)  # (12,)
+    per_ch = _trapz(psd[idx], freqs[idx], axis=0)  # (12,)
     return float(np.average(per_ch, weights=weights))
 
 
@@ -233,7 +269,7 @@ def hemisphere_band_power(freqs: np.ndarray,
     Left: Ch1–6, Right: Ch7–12.
     """
     idx = (freqs >= fmin) & (freqs <= fmax)
-    per_ch = np.trapz(psd[idx], freqs[idx], axis=0)  # (12,)
+    per_ch = _trapz(psd[idx], freqs[idx], axis=0)  # (12,)
 
     left  = float(np.average(per_ch[LEFT_CH],  weights=weights[LEFT_CH]))
     right = float(np.average(per_ch[RIGHT_CH], weights=weights[RIGHT_CH]))
@@ -352,11 +388,80 @@ def process_session(filepath: Path) -> dict:
     }
 
 
+def process_and_insert(filepath: Path) -> dict:
+    """
+    Process a single session file and insert metrics into BigQuery neurable_readings.
+    Returns the metrics dict.
+    """
+    from datetime import datetime, timezone
+    from gcp import bq  # type: ignore
+
+    pattern = re.compile(r"^(\d{8})_(pre|post)-boxing_")
+    m = pattern.match(filepath.name)
+    if not m:
+        raise ValueError(f"Filename does not match expected pattern: {filepath.name}")
+
+    date = pd.to_datetime(m.group(1), format="%m%d%Y").date().isoformat()
+    timing = m.group(2)
+
+    # Dedup: skip if this source file is already in BQ
+    try:
+        existing = list(bq.query(
+            f"SELECT 1 FROM `boxsmart-492022.boxsmart.neurable_readings`"
+            f" WHERE source_file = '{filepath.name}' LIMIT 1"
+        ).result())
+        if existing:
+            print(f"[eeg_pipeline] {filepath.name} already in BQ — skipping insert")
+            return process_session(filepath)
+    except Exception as e:
+        print(f"[eeg_pipeline] dedup check failed for {filepath.name}: {e}")
+
+    metrics = process_session(filepath)
+
+    def _safe(v):
+        import math
+        if v is None:
+            return None
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return None
+        return v
+
+    row = {
+        "date":        date,
+        "timing":      timing,
+        "source_file": filepath.name,
+        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        **{k: _safe(v) for k, v in metrics.items()},
+    }
+
+    errors = bq.insert_rows_json(
+        f"boxsmart-492022.boxsmart.neurable_readings", [row]
+    )
+    if errors:
+        print(f"[eeg_pipeline] BQ insert errors for {filepath.name}: {errors[:2]}")
+
+    return metrics
+
+
 def process_all_sessions() -> pd.DataFrame:
     """
-    Process all sessions in DATA_DIR. Returns tidy DataFrame.
+    On Cloud Run: read processed metrics from BigQuery neurable_readings.
+    Locally: process all session files in DATA_DIR.
     Columns: date, timing, source_file, + all metric keys.
     """
+    if os.getenv("K_SERVICE"):
+        try:
+            from gcp import bq  # type: ignore
+            query = "SELECT * FROM `boxsmart-492022.boxsmart.neurable_readings` ORDER BY date, timing"
+            df = bq.query(query).to_dataframe()
+            if not df.empty:
+                df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
+            return df
+        except Exception as e:
+            print(f"[eeg_pipeline] BQ read failed: {e}")
+            return pd.DataFrame()
+
+    # Local: process from files
     rows = []
     for session in list_sessions():
         try:

@@ -36,7 +36,7 @@ from whoop_loader import load_cycles, load_sleep, sleep_stage_pct
 from survey_loader import load_survey, CONTACT_MAP
 import eeg_pipeline
 
-PISON_CSV = Path(__file__).parents[2] / "pison" / "data" / "pison_extracted.csv"
+_PISON_CSV = Path(__file__).parents[2] / "pison" / "data" / "pison_extracted.csv"
 
 # Literature-derived thresholds
 RECOVERY_THRESHOLD = 33.0   # % — "red" zone in WHOOP; below = do not train hard
@@ -73,15 +73,40 @@ def _load_merged() -> pd.DataFrame:
         return pd.DataFrame(columns=MERGED_COLS)
 
 
-PISON_COLS = ["source_image", "category", "date", "week_start", "week_end",
-              "summary_value", "summary_unit", "vs_baseline_pct", "vs_baseline_direction",
-              "reading_timestamp", "reading_value", "reading_unit",
-              "reading_vs_baseline_pct", "reading_vs_baseline_direction", "notes"]
-
 def _load_pison() -> pd.DataFrame:
-    if not PISON_CSV.exists():
-        return pd.DataFrame(columns=PISON_COLS)
-    df = pd.read_csv(PISON_CSV)
+    """
+    Load Pison readings in tall format:
+      date (datetime), category (daily_readiness|daily_agility), reading_value (float), notes (str)
+
+    Queries BigQuery pison_readings (wide: readiness_ms, agility_score, tags);
+    falls back to local pison_extracted.csv.
+    """
+    try:
+        from gcp import bq  # type: ignore
+        query = "SELECT date, readiness_ms, agility_score, tags FROM `boxsmart-492022.boxsmart.pison_readings`"
+        raw = bq.query(query).to_dataframe()
+        rows = []
+        for _, r in raw.iterrows():
+            dt = pd.to_datetime(r["date"])
+            tags = str(r["tags"]) if pd.notna(r.get("tags")) else ""
+            if pd.notna(r.get("readiness_ms")):
+                rows.append({"date": dt, "category": "daily_readiness",
+                             "reading_value": float(r["readiness_ms"]), "notes": tags})
+            if pd.notna(r.get("agility_score")):
+                rows.append({"date": dt, "category": "daily_agility",
+                             "reading_value": float(r["agility_score"]), "notes": tags})
+        if rows:
+            return pd.DataFrame(rows)
+    except Exception as e:
+        print(f"[_load_pison] BQ query failed: {e}")
+
+    # Local CSV fallback
+    if not _PISON_CSV.exists():
+        return pd.DataFrame({"date": pd.Series(dtype="datetime64[ns]"),
+                             "category": pd.Series(dtype=str),
+                             "reading_value": pd.Series(dtype=float),
+                             "notes": pd.Series(dtype=str)})
+    df = pd.read_csv(_PISON_CSV)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     return df
 
@@ -135,10 +160,13 @@ def get_ab_sparring():  # noqa: C901
         stat, pval = stats.mannwhitneyu(spar, nospar, alternative="two-sided")
         lo_s, hi_s = _bootstrap_ci(spar)
         lo_n, hi_n = _bootstrap_ci(nospar)
+        pooled_std = np.sqrt((np.var(spar, ddof=1) + np.var(nospar, ddof=1)) / 2)
+        cohens_d = round(float((np.mean(spar) - np.mean(nospar)) / pooled_std), 3) if pooled_std > 0 else None
         return {
             "label": label,
             "sparring":     {"mean": round(float(np.mean(spar)), 3),  "ci_lo": lo_s, "ci_hi": hi_s, "n": len(spar)},
             "non_sparring": {"mean": round(float(np.mean(nospar)), 3), "ci_lo": lo_n, "ci_hi": hi_n, "n": len(nospar)},
+            "cohens_d":  cohens_d,
             "mw_u":      round(float(stat), 2),
             "p_value":   round(float(pval), 4),
             "significant": bool(pval < 0.05),
@@ -197,10 +225,10 @@ def get_ab_sparring():  # noqa: C901
         eeg_n_note = f"EEG: n={n_spar} sparring, n={n_nospar} non-sparring sessions — interpret with caution"
 
         eeg_metrics = {
+            "alpha_reactivity":  "Alpha Reactivity",
             "alpha_theta_ratio": "Alpha/Theta Ratio",
             "rel_alpha_eo":      "Rel. Alpha EO",
             "rel_theta_eo":      "Rel. Theta EO",
-            "sef90":             "SEF90 (Hz)",
         }
         for col, label in eeg_metrics.items():
             if col not in eeg_df.columns:
@@ -392,20 +420,18 @@ def get_longitudinal():
         if c in weekly:
             weekly[c] = weekly[c].round(2)
 
-    # Merge in Pison weekly data
+    # Merge in Pison weekly averages (computed from daily readings)
     pison = _load_pison()
-    pison_r = pison[pison["category"] == "weekly_readiness"][["date", "summary_value"]].copy()
-    pison_r.columns = ["date", "readiness_ms"]
-    pison_r["date"] = pd.to_datetime(pison_r["date"])
-    pison_r["week_start"] = (pison_r["date"] - pd.to_timedelta(pison_r["date"].dt.dayofweek, unit="D")).dt.strftime("%Y-%m-%d")
-
-    pison_a = pison[pison["category"] == "weekly_agility"][["date", "summary_value"]].copy()
-    pison_a.columns = ["date", "agility"]
-    pison_a["date"] = pd.to_datetime(pison_a["date"])
-    pison_a["week_start"] = (pison_a["date"] - pd.to_timedelta(pison_a["date"].dt.dayofweek, unit="D")).dt.strftime("%Y-%m-%d")
-
-    weekly = weekly.merge(pison_r[["week_start", "readiness_ms"]], on="week_start", how="left")
-    weekly = weekly.merge(pison_a[["week_start", "agility"]], on="week_start", how="left")
+    if not pison.empty:
+        pison["week_start"] = (pison["date"] - pd.to_timedelta(pison["date"].dt.dayofweek, unit="D")).dt.strftime("%Y-%m-%d")
+        pison_r = (pison[pison["category"] == "daily_readiness"]
+                   .groupby("week_start")["reading_value"].mean().round(1)
+                   .reset_index().rename(columns={"reading_value": "readiness_ms"}))
+        pison_a = (pison[pison["category"] == "daily_agility"]
+                   .groupby("week_start")["reading_value"].mean().round(1)
+                   .reset_index().rename(columns={"reading_value": "agility"}))
+        weekly = weekly.merge(pison_r, on="week_start", how="left")
+        weekly = weekly.merge(pison_a, on="week_start", how="left")
 
     # EEG weekly averages
     try:
@@ -417,7 +443,9 @@ def get_longitudinal():
                 eeg_valid["date_col"] - pd.to_timedelta(eeg_valid["date_col"].dt.dayofweek, unit="D")
             ).dt.strftime("%Y-%m-%d")
             eeg_weekly = (
-                eeg_valid.groupby("week_start")[["alpha_theta_ratio", "sef90"]]
+                eeg_valid.groupby("week_start")[
+                    ["alpha_reactivity", "alpha_theta_ratio", "rel_alpha_eo", "rel_theta_eo"]
+                ]
                 .mean().round(4).reset_index()
             )
             weekly = weekly.merge(eeg_weekly, on="week_start", how="left")
@@ -454,12 +482,12 @@ def get_neuroprotective():
     df = df.merge(readiness_avg, on="date_str", how="left")
 
     # Add EEG alpha/theta ratio
-    eeg_sessions = eeg_pipeline.process_all_sessions()
-    if not eeg_sessions.empty:
-        eeg_valid = eeg_sessions[eeg_sessions["poor_contact"] != True].copy()
-        eeg_valid["date_str"] = eeg_valid["date"].astype(str)
-        eeg_avg = eeg_valid.groupby("date_str")[["alpha_theta_ratio"]].mean().reset_index()
-        df = df.merge(eeg_avg, on="date_str", how="left")
+    neurable_readings = eeg_pipeline.process_all_sessions()
+    if not neurable_readings.empty:
+        neurable_valid = neurable_readings[neurable_readings["poor_contact"] != True].copy()
+        neurable_valid["date_str"] = neurable_valid["date"].astype(str)
+        neurable_avg = neurable_valid.groupby("date_str")[["alpha_theta_ratio"]].mean().reset_index()
+        df = df.merge(neurable_avg, on="date_str", how="left")
 
     metrics = ["hrv_ms", "recovery_pct", "rhr_bpm", "sleep_perf_pct", "readiness_ms", "alpha_theta_ratio"]
 
@@ -512,6 +540,107 @@ def get_neuroprotective():
         "creatine": creatine_effect,
         "creatine_cumulative_hrv_correlation": cumulative_corr,
     })
+
+
+# ---------------------------------------------------------------------------
+# Correlation matrix
+# ---------------------------------------------------------------------------
+
+@router.get("/correlation-matrix")
+def get_correlation_matrix():
+    """
+    Spearman ρ correlation matrix across all neurological variables.
+    Variables: head_contact_score, readiness_ms, agility, alpha_reactivity,
+               alpha_theta_ratio, rel_alpha_eo, rel_theta_eo.
+    Spearman is used for all pairs: handles ordinal×continuous and small n.
+    Uses pre-session EEG readings as the daily baseline measurement.
+    """
+    VARS = [
+        ("head_contact",      "Head Contact"),
+        ("readiness_ms",      "Readiness"),
+        ("agility",           "Agility"),
+        ("alpha_reactivity",  "Alpha Reactivity"),
+        ("alpha_theta_ratio", "Alpha/Theta"),
+        ("rel_alpha_eo",      "Rel. Alpha EO"),
+        ("rel_theta_eo",      "Rel. Theta EO"),
+    ]
+
+    # ── Survey: head contact (daily) ────────────────────────────────────────
+    survey = load_survey(filled_only=False)
+    survey["date"] = pd.to_datetime(survey["date"]).dt.strftime("%Y-%m-%d")
+    survey["head_contact"] = survey["head_contact_level"].map(CONTACT_MAP)
+    survey_slim = survey[["date", "head_contact"]].dropna(subset=["head_contact"])
+
+    # ── Pison: daily averages ───────────────────────────────────────────────
+    pison = _load_pison()
+    if not pison.empty:
+        pison["date_str"] = pison["date"].dt.strftime("%Y-%m-%d")
+        readiness = (
+            pison[pison["category"] == "daily_readiness"]
+            .groupby("date_str")["reading_value"].mean()
+            .reset_index()
+            .rename(columns={"date_str": "date", "reading_value": "readiness_ms"})
+        )
+        agility = (
+            pison[pison["category"] == "daily_agility"]
+            .groupby("date_str")["reading_value"].mean()
+            .reset_index()
+            .rename(columns={"date_str": "date", "reading_value": "agility"})
+        )
+    else:
+        readiness = pd.DataFrame({"date": pd.Series(dtype=str), "readiness_ms": pd.Series(dtype=float)})
+        agility   = pd.DataFrame({"date": pd.Series(dtype=str), "agility":       pd.Series(dtype=float)})
+
+    # ── EEG: pre-session readings only ─────────────────────────────────────
+    eeg_raw = eeg_pipeline.process_all_sessions()
+    eeg_cols = ["alpha_reactivity", "alpha_theta_ratio", "rel_alpha_eo", "rel_theta_eo"]
+    if not eeg_raw.empty:
+        eeg_pre = eeg_raw[
+            (eeg_raw["timing"] == "pre") & (eeg_raw["poor_contact"] != True)
+        ].copy()
+        eeg_pre["date"] = eeg_pre["date"].astype(str)
+        available = ["date"] + [c for c in eeg_cols if c in eeg_pre.columns]
+        eeg_slim = eeg_pre[available].copy()
+    else:
+        eeg_slim = pd.DataFrame({"date": pd.Series(dtype=str)})
+
+    # ── Join on date ────────────────────────────────────────────────────────
+    df = survey_slim.merge(readiness, on="date", how="left")
+    df = df.merge(agility, on="date", how="left")
+    df = df.merge(eeg_slim, on="date", how="left")
+
+    available_vars = [(k, l) for k, l in VARS if k in df.columns]
+    var_keys   = [k for k, _ in available_vars]
+    var_labels = [l for _, l in available_vars]
+
+    # ── Spearman ρ for all pairs ────────────────────────────────────────────
+    matrix = []
+    for i, (k1, _) in enumerate(available_vars):
+        row = []
+        for j, (k2, _) in enumerate(available_vars):
+            if i == j:
+                row.append({
+                    "rho": 1.0,
+                    "p_value": None,
+                    "n": int(df[k1].notna().sum()),
+                    "test": "Spearman ρ",
+                })
+            else:
+                pair = df[[k1, k2]].dropna()
+                n = len(pair)
+                if n >= 5:
+                    rho, pval = stats.spearmanr(pair[k1], pair[k2])
+                    row.append({
+                        "rho":     round(float(rho), 3),
+                        "p_value": round(float(pval), 4),
+                        "n":       n,
+                        "test":    "Spearman ρ",
+                    })
+                else:
+                    row.append({"rho": None, "p_value": None, "n": n, "test": "Spearman ρ"})
+        matrix.append(row)
+
+    return _clean({"var_keys": var_keys, "var_labels": var_labels, "matrix": matrix})
 
 
 # ---------------------------------------------------------------------------
