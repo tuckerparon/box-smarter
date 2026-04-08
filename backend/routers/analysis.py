@@ -620,24 +620,13 @@ def get_neuroprotective():
 @router.get("/correlation-matrix")
 def get_correlation_matrix():
     """
-    Spearman ρ correlation matrix across all neurological variables.
-    Variables: head_contact_score, readiness_ms, agility, alpha_reactivity,
-               alpha_theta_ratio, rel_alpha_eo, rel_theta_eo.
-    Spearman is used for all pairs: handles ordinal×continuous and small n.
-    Uses pre-session EEG readings as the daily baseline measurement.
+    Spearman ρ correlation matrix — two modes returned in one call:
+      delta:        same-day EEG/Pison post−pre delta vs head_contact & headache
+      next_day_pre: previous day's survey vs next morning's pre-session EEG baseline
     """
-    VARS = [
-        ("head_contact",      "Head Contact"),
-        ("headache",          "Headache"),
-        ("readiness_ms",      "Readiness"),
-        ("agility",           "Agility"),
-        ("alpha_reactivity",  "Alpha Reactivity"),
-        ("alpha_theta_ratio", "Alpha/Theta"),
-        ("rel_alpha_eo",      "Rel. Alpha EO"),
-        ("rel_theta_eo",      "Rel. Theta EO"),
-    ]
+    eeg_cols = ["alpha_reactivity", "alpha_theta_ratio", "rel_alpha_eo", "rel_theta_eo"]
 
-    # ── Survey: head contact + headache (daily) ─────────────────────────────
+    # ── Shared: survey ──────────────────────────────────────────────────────
     survey = load_survey(filled_only=False)
     survey["date"] = pd.to_datetime(survey["date"]).dt.strftime("%Y-%m-%d")
     survey["head_contact"] = survey["head_contact_level"].map(CONTACT_MAP)
@@ -649,74 +638,134 @@ def get_correlation_matrix():
     if "headache_f" in survey_slim.columns:
         survey_slim = survey_slim.rename(columns={"headache_f": "headache"})
 
-    # ── Pison: daily averages ───────────────────────────────────────────────
+    # ── Shared: Pison daily averages ────────────────────────────────────────
     pison = _load_pison()
     if not pison.empty:
         pison["date_str"] = pison["date"].dt.strftime("%Y-%m-%d")
-        readiness = (
+        readiness_daily = (
             pison[pison["category"] == "daily_readiness"]
-            .groupby("date_str")["reading_value"].mean()
-            .reset_index()
+            .groupby("date_str")["reading_value"].mean().reset_index()
             .rename(columns={"date_str": "date", "reading_value": "readiness_ms"})
         )
-        agility = (
+        agility_daily = (
             pison[pison["category"] == "daily_agility"]
-            .groupby("date_str")["reading_value"].mean()
-            .reset_index()
+            .groupby("date_str")["reading_value"].mean().reset_index()
             .rename(columns={"date_str": "date", "reading_value": "agility"})
         )
+        # Pison delta (post − pre) per day
+        notes_lower = pison["notes"].fillna("").str.lower()
+        pison["is_pre"]  = notes_lower.str.contains("pre-boxing|pre boxing|pre-sparring|pre sparring")
+        pison["is_post"] = notes_lower.str.contains("post-boxing|post boxing|post-sparring|post sparring")
+        pison_delta_rows = []
+        for date_str, grp in pison.groupby("date_str"):
+            row = {"date": date_str}
+            for cat, col_name in [("daily_readiness", "readiness_ms"), ("daily_agility", "agility")]:
+                sub = grp[grp["category"] == cat]
+                pre_v  = sub[sub["is_pre"]]["reading_value"]
+                post_v = sub[sub["is_post"]]["reading_value"]
+                if not pre_v.empty and not post_v.empty:
+                    row[col_name] = float(post_v.mean()) - float(pre_v.mean())
+            pison_delta_rows.append(row)
+        pison_delta = pd.DataFrame(pison_delta_rows) if pison_delta_rows else pd.DataFrame()
     else:
-        readiness = pd.DataFrame({"date": pd.Series(dtype=str), "readiness_ms": pd.Series(dtype=float)})
-        agility   = pd.DataFrame({"date": pd.Series(dtype=str), "agility":       pd.Series(dtype=float)})
+        readiness_daily = pd.DataFrame({"date": pd.Series(dtype=str), "readiness_ms": pd.Series(dtype=float)})
+        agility_daily   = pd.DataFrame({"date": pd.Series(dtype=str), "agility":       pd.Series(dtype=float)})
+        pison_delta     = pd.DataFrame()
 
-    # ── EEG: pre-session readings only ─────────────────────────────────────
+    # ── Shared: EEG raw ─────────────────────────────────────────────────────
     eeg_raw = eeg_pipeline.process_all_sessions()
-    eeg_cols = ["alpha_reactivity", "alpha_theta_ratio", "rel_alpha_eo", "rel_theta_eo"]
+
+    # ── Helper: compute Spearman matrix ─────────────────────────────────────
+    def _spearman_matrix(df, var_list):
+        avail = [(k, l) for k, l in var_list if k in df.columns]
+        vkeys  = [k for k, _ in avail]
+        vlabels = [l for _, l in avail]
+        mat = []
+        for i, (k1, _) in enumerate(avail):
+            row = []
+            for j, (k2, _) in enumerate(avail):
+                if i == j:
+                    row.append({"rho": 1.0, "p_value": None,
+                                "n": int(df[k1].notna().sum()), "test": "Spearman ρ"})
+                else:
+                    pair = df[[k1, k2]].dropna()
+                    n = len(pair)
+                    if n >= 5:
+                        rho, pval = stats.spearmanr(pair[k1], pair[k2])
+                        row.append({"rho": round(float(rho), 3),
+                                    "p_value": round(float(pval), 4),
+                                    "n": n, "test": "Spearman ρ"})
+                    else:
+                        row.append({"rho": None, "p_value": None, "n": n, "test": "Spearman ρ"})
+            mat.append(row)
+        return {"var_keys": vkeys, "var_labels": vlabels, "matrix": mat}
+
+    # ── Mode 1: Same-day delta (post − pre) ────────────────────────────────
+    delta_result = {}
+    if not eeg_raw.empty:
+        delta_rows = []
+        for date, grp in eeg_raw.groupby("date"):
+            pre_row  = grp[grp["timing"] == "pre"]
+            post_row = grp[grp["timing"] == "post"]
+            if pre_row.empty or post_row.empty:
+                continue
+            row = {"date": str(date)}
+            for col in eeg_cols:
+                if col in grp.columns:
+                    pv   = pre_row[col].dropna()
+                    posv = post_row[col].dropna()
+                    if not pv.empty and not posv.empty:
+                        row[col] = float(posv.iloc[0]) - float(pv.iloc[0])
+            delta_rows.append(row)
+
+        if delta_rows:
+            eeg_delta = pd.DataFrame(delta_rows)
+            df_d = survey_slim.merge(eeg_delta, on="date", how="inner")
+            if not pison_delta.empty:
+                df_d = df_d.merge(pison_delta, on="date", how="left")
+            else:
+                df_d = df_d.merge(readiness_daily, on="date", how="left")
+                df_d = df_d.merge(agility_daily,   on="date", how="left")
+
+            DELTA_VARS = [
+                ("head_contact",      "Head Contact"),
+                ("headache",          "Headache"),
+                ("readiness_ms",      "Readiness Δ"),
+                ("agility",           "Agility Δ"),
+                ("alpha_reactivity",  "Alpha Reactivity Δ"),
+                ("alpha_theta_ratio", "Alpha/Theta Δ"),
+                ("rel_alpha_eo",      "Rel. Alpha EO Δ"),
+                ("rel_theta_eo",      "Rel. Theta EO Δ"),
+            ]
+            delta_result = _spearman_matrix(df_d, DELTA_VARS)
+
+    # ── Mode 2: Next-day pre-session ────────────────────────────────────────
+    next_day_result = {}
     if not eeg_raw.empty:
         eeg_pre = eeg_raw[eeg_raw["timing"] == "pre"].copy()
-        eeg_pre["date"] = eeg_pre["date"].astype(str)
-        available = ["date"] + [c for c in eeg_cols if c in eeg_pre.columns]
-        eeg_slim = eeg_pre[available].copy()
-    else:
-        eeg_slim = pd.DataFrame({"date": pd.Series(dtype=str)})
+        eeg_pre["date_dt"]   = pd.to_datetime(eeg_pre["date"].astype(str))
+        eeg_pre["prev_date"] = (eeg_pre["date_dt"] - pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d")
+        avail_cols = ["prev_date"] + [c for c in eeg_cols if c in eeg_pre.columns]
+        eeg_pre_slim = eeg_pre[avail_cols].rename(columns={"prev_date": "date"})
+        eeg_pre_slim = eeg_pre_slim.groupby("date")[[c for c in eeg_cols if c in eeg_pre_slim.columns]].mean().reset_index()
 
-    # ── Join on date ────────────────────────────────────────────────────────
-    df = survey_slim.merge(readiness, on="date", how="left")
-    df = df.merge(agility, on="date", how="left")
-    df = df.merge(eeg_slim, on="date", how="left")
+        df_n = survey_slim.merge(readiness_daily, on="date", how="left")
+        df_n = df_n.merge(agility_daily,   on="date", how="left")
+        df_n = df_n.merge(eeg_pre_slim,    on="date", how="inner")
 
-    available_vars = [(k, l) for k, l in VARS if k in df.columns]
-    var_keys   = [k for k, _ in available_vars]
-    var_labels = [l for _, l in available_vars]
+        NEXT_VARS = [
+            ("head_contact",      "Head Contact (prev day)"),
+            ("headache",          "Headache (prev day)"),
+            ("readiness_ms",      "Readiness (prev day)"),
+            ("agility",           "Agility (prev day)"),
+            ("alpha_reactivity",  "Next-AM Alpha Reactivity"),
+            ("alpha_theta_ratio", "Next-AM Alpha/Theta"),
+            ("rel_alpha_eo",      "Next-AM Rel. Alpha EO"),
+            ("rel_theta_eo",      "Next-AM Rel. Theta EO"),
+        ]
+        next_day_result = _spearman_matrix(df_n, NEXT_VARS)
 
-    # ── Spearman ρ for all pairs ────────────────────────────────────────────
-    matrix = []
-    for i, (k1, _) in enumerate(available_vars):
-        row = []
-        for j, (k2, _) in enumerate(available_vars):
-            if i == j:
-                row.append({
-                    "rho": 1.0,
-                    "p_value": None,
-                    "n": int(df[k1].notna().sum()),
-                    "test": "Spearman ρ",
-                })
-            else:
-                pair = df[[k1, k2]].dropna()
-                n = len(pair)
-                if n >= 5:
-                    rho, pval = stats.spearmanr(pair[k1], pair[k2])
-                    row.append({
-                        "rho":     round(float(rho), 3),
-                        "p_value": round(float(pval), 4),
-                        "n":       n,
-                        "test":    "Spearman ρ",
-                    })
-                else:
-                    row.append({"rho": None, "p_value": None, "n": n, "test": "Spearman ρ"})
-        matrix.append(row)
-
-    return _clean({"var_keys": var_keys, "var_labels": var_labels, "matrix": matrix})
+    return _clean({"delta": delta_result, "next_day_pre": next_day_result})
 
 
 # ---------------------------------------------------------------------------

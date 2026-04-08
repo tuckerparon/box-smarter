@@ -818,14 +818,41 @@ function corrTextColor(rho) {
   return Math.abs(rho) > 0.45 ? '#fff' : T.text
 }
 
-function CorrelationMatrix({ data }) {
+const RQ2_MODES = [
+  { key: 'delta',        label: 'Same Day Δ',     desc: 'session post−pre delta vs head contact & headache' },
+  { key: 'next_day_pre', label: 'Next Day Pre',   desc: 'previous day survey vs next morning pre-session EEG' },
+]
+
+function CorrelationMatrix({ data, activeMode, onModeChange }) {
   const [tooltip, setTooltip] = useState(null)
 
-  if (!data?.matrix?.length) {
-    return <p style={{ color: T.subtext, fontFamily: T.sans }} className="text-sm">No correlation data yet.</p>
+  const activeData = data?.[activeMode]
+
+  if (!activeData?.matrix?.length) {
+    return (
+      <Card className="p-5">
+        <div className="flex gap-2 mb-4">
+          {RQ2_MODES.map(m => (
+            <button key={m.key} onClick={() => onModeChange(m.key)}
+              title={m.desc}
+              className="text-xs px-3 py-1 rounded transition-all"
+              style={{
+                background: activeMode === m.key ? '#7B5800' : T.bg,
+                color: activeMode === m.key ? '#fff' : T.subtext,
+                border: `1px solid ${activeMode === m.key ? '#7B5800' : T.border}`,
+                fontFamily: T.sans,
+                fontWeight: activeMode === m.key ? 600 : 400,
+              }}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <p style={{ color: T.subtext, fontFamily: T.sans }} className="text-sm">No correlation data yet.</p>
+      </Card>
+    )
   }
 
-  const { var_keys, var_labels, matrix } = data
+  const { var_keys, var_labels, matrix } = activeData
   const n = var_keys.length
   const CELL_SIZE = 68
   const LABEL_W = 100
@@ -904,6 +931,27 @@ function CorrelationMatrix({ data }) {
 
   return (
     <Card className="p-5">
+      {/* Mode toggle */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {RQ2_MODES.map(m => (
+          <button key={m.key} onClick={() => onModeChange(m.key)}
+            title={m.desc}
+            className="text-xs px-3 py-1 rounded transition-all"
+            style={{
+              background: activeMode === m.key ? '#7B5800' : T.bg,
+              color: activeMode === m.key ? '#fff' : T.subtext,
+              border: `1px solid ${activeMode === m.key ? '#7B5800' : T.border}`,
+              fontFamily: T.sans,
+              fontWeight: activeMode === m.key ? 600 : 400,
+            }}>
+            {m.label}
+          </button>
+        ))}
+        <span className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>
+          — {RQ2_MODES.find(m => m.key === activeMode)?.desc}
+        </span>
+      </div>
+
       <div style={{ overflowX: 'auto' }}>
         <div style={{
           display: 'grid',
@@ -1054,6 +1102,7 @@ function MetricGlossary() {
 export default function Dashboard() {
   const { data, loading, error } = useDashboardData()
   const [h1View, setH1View] = useState('delta')
+  const [rq2Mode, setRq2Mode] = useState('delta')
 
   if (error) return (
     <div style={{ background: T.bg }} className="min-h-screen flex items-center justify-center">
@@ -1151,15 +1200,17 @@ export default function Dashboard() {
             Cross-Variable Correlation Matrix
             <Info
               title="Spearman ρ correlation matrix"
-              formula="Spearman ρ for all pairs — handles ordinal (head contact) × continuous and small n\nPre-session EEG readings used as daily neurological baseline"
+              formula="Same Day Δ: correlates post−pre session change in EEG/ENG with same-day head contact & headache\nNext Day Pre: correlates previous day's survey with next morning's pre-session EEG baseline\nSpearman ρ — handles ordinal (head contact) × continuous, appropriate for small n"
               citation="Spearman ρ makes no assumption about data distribution and handles ordinal variables (head contact scale) mixed with continuous EEG/ENG measures — appropriate for this dataset's small n and non-normal distributions."
             />
           </h2>
 
-          {loading ? <Skeleton h="h-72" /> : <CorrelationMatrix data={data?.correlationMatrix} />}
+          {loading ? <Skeleton h="h-72" /> : (
+            <CorrelationMatrix data={data?.correlationMatrix} activeMode={rq2Mode} onModeChange={setRq2Mode} />
+          )}
 
           {!loading && (
-            <InterpretationBox lines={buildRQ2Interpretation(data?.correlationMatrix)} />
+            <InterpretationBox lines={buildRQ2Interpretation(data?.correlationMatrix?.[rq2Mode])} />
           )}
         </section>
 
