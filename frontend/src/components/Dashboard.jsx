@@ -26,7 +26,7 @@ const CONTACT_BG     = { None: 'transparent', Low: 'rgba(212,160,23,0.08)', Medi
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
-function Info({ title, formula, citation }) {
+function Info({ title, formula, citation, citationLinks }) {
   const [open, setOpen] = useState(false)
   return (
     <span className="relative inline-block align-middle ml-1">
@@ -50,6 +50,12 @@ function Info({ title, formula, citation }) {
             </p>
           )}
           {citation && <p className="text-xs italic leading-relaxed" style={{ color: T.dimText }}>{citation}</p>}
+          {citationLinks?.map((l, i) => (
+            <a key={i} href={l.url} target="_blank" rel="noreferrer"
+              className="text-xs italic block mt-1 hover:underline" style={{ color: T.accent2 }}>
+              {l.text}
+            </a>
+          ))}
           <button onClick={() => setOpen(false)} className="mt-3 text-xs hover:underline" style={{ color: T.dimText }}>Close</button>
         </div>
       )}
@@ -130,7 +136,8 @@ const EEG_DEFS = {
     info: {
       title: 'Alpha Reactivity (EC − EO)',
       formula: 'α_power_EC − α_power_EO  (8–12 Hz, Welch PSD)',
-      citation: 'Klimesch (1999) Brain Res Rev — alpha ERD during eye-opening is a marker of cortical arousal; blunted reactivity follows head impact',
+      citation: 'Alpha suppression during eye-opening (ERD) is a robust marker of cortical arousal. Blunted reactivity is associated with neurological disorders and post-impact states.',
+      citationLinks: [{ text: 'Klimesch (1999) Brain Research Reviews', url: 'https://doi.org/10.1016/S0165-0173(98)00056-3' }],
     },
   },
   alpha_theta_ratio: {
@@ -140,7 +147,8 @@ const EEG_DEFS = {
     info: {
       title: 'Alpha/Theta Ratio (EO epoch)',
       formula: 'α_power_EO / θ_power_EO  (8–12 Hz / 4–8 Hz)',
-      citation: 'Klimesch (1999) — α/θ tracks cognitive performance; decreases with neural fatigue and post-concussive states',
+      citation: 'Good cognitive performance is associated with higher alpha and lower theta power. The ratio captures this balance in a single number.',
+      citationLinks: [{ text: 'Klimesch (1999) Brain Research Reviews', url: 'https://doi.org/10.1016/S0165-0173(98)00056-3' }],
     },
   },
   rel_alpha_eo: {
@@ -150,7 +158,8 @@ const EEG_DEFS = {
     info: {
       title: 'Relative Alpha Power (EO)',
       formula: 'α_EO / Σband_power_EO  (normalized to 1–45 Hz total)',
-      citation: 'Nunez & Srinivasan (2006) — relative power controls for session-to-session amplitude drift',
+      citation: 'Expressing alpha as a fraction of total power removes session-to-session amplitude variation caused by headset fit, making comparisons across days more reliable.',
+      citationLinks: [{ text: 'Nunez & Srinivasan (2006) Electric Fields of the Brain', url: 'https://www.academia.edu/63514950/Electric_Fields_of_the_Brain_The_Neurophysics_of_EEG_second_ed_Paul_L_Nunez_Ramesh_Srinivasan_Oxford_University_Press_Oxford_2005_611_pages_ISBN_0_19_505038_7' }],
     },
   },
   rel_theta_eo: {
@@ -160,7 +169,8 @@ const EEG_DEFS = {
     info: {
       title: 'Relative Theta Power (EO)',
       formula: 'θ_EO / Σband_power_EO  (normalized to 1–45 Hz total)',
-      citation: 'Slobounov et al. (2010) J Neural Eng — elevated theta EO is a sub-concussive fatigue marker',
+      citation: 'Theta power increases with cognitive load, fatigue, and in subjects with neurological disorders. Elevated theta during an alert eyes-open state is associated with reduced cognitive performance.',
+      citationLinks: [{ text: 'Klimesch (1999) Brain Research Reviews', url: 'https://doi.org/10.1016/S0165-0173(98)00056-3' }],
     },
   },
 }
@@ -173,11 +183,12 @@ function KeyFindings({ data }) {
 
   const atr = data.abSparring?.eeg?.alpha_theta_ratio
   if (atr?.sparring?.mean != null && atr?.non_sparring?.mean != null) {
-    const diff = atr.sparring.mean - atr.non_sparring.mean
+    const sp = atr.sparring.mean, ns = atr.non_sparring.mean
+    const diff = sp - ns
     findings.push({
-      label: 'Alpha/theta ratio — sparring vs non-sparring',
+      label: 'Alpha/Theta Ratio — sparring vs non-sparring',
       value: `${diff >= 0 ? '+' : ''}${diff.toFixed(3)}`,
-      detail: diff < 0 ? 'Lower EEG arousal index on contact days' : 'Higher EEG arousal index on contact days',
+      detail: `${sp.toFixed(3)} on sparring days vs ${ns.toFixed(3)} on non-sparring days. This ratio reflects how alert and cognitively ready the brain is — higher alpha relative to theta signals a focused, ready mind. A ${diff < 0 ? `${Math.abs(diff).toFixed(3)} point drop on sparring days suggests the brain is carrying more mental fatigue and less cognitive sharpness after head contact` : 'higher ratio on sparring days suggests no decline in cognitive readiness'}.`,
       color: T.accent2,
       sig: atr.sparring?.p_value != null && atr.sparring.p_value < 0.05,
     })
@@ -185,11 +196,12 @@ function KeyFindings({ data }) {
 
   const ar = data.abSparring?.eeg?.alpha_reactivity
   if (ar?.sparring?.mean != null && ar?.non_sparring?.mean != null) {
-    const diff = ar.sparring.mean - ar.non_sparring.mean
+    const sp = ar.sparring.mean, ns = ar.non_sparring.mean
+    const diff = sp - ns
     findings.push({
-      label: 'Alpha reactivity — sparring vs non-sparring',
+      label: 'Alpha Reactivity — sparring vs non-sparring',
       value: EEG_DEFS.alpha_reactivity.fmt(diff),
-      detail: diff < 0 ? 'Blunted arousal response on sparring days (supports H1)' : 'No reactivity suppression on sparring days',
+      detail: `${EEG_DEFS.alpha_reactivity.fmt(sp)} on sparring days vs ${EEG_DEFS.alpha_reactivity.fmt(ns)} on non-sparring days. When you open your eyes, a healthy brain suppresses its alpha waves — a sign it has shifted into an alert, active state. A ${diff < 0 ? 'weaker suppression on sparring days suggests the brain\'s arousal mechanism is blunted, a pattern seen after neurological stress from head impact' : 'similar or stronger suppression on sparring days — no evidence of blunted arousal response'}.`,
       color: diff < 0 ? T.accent : T.accent3,
       sig: ar.sparring?.p_value != null && ar.sparring.p_value < 0.05,
     })
@@ -197,11 +209,12 @@ function KeyFindings({ data }) {
 
   const rt = data.abSparring?.pison?.readiness_ms
   if (rt?.sparring?.mean != null && rt?.non_sparring?.mean != null) {
-    const diff = rt.sparring.mean - rt.non_sparring.mean
+    const sp = rt.sparring.mean, ns = rt.non_sparring.mean
+    const diff = sp - ns
     findings.push({
-      label: 'Reaction time — sparring vs non-sparring',
+      label: 'Reaction Time — sparring vs non-sparring',
       value: `${diff >= 0 ? '+' : ''}${diff.toFixed(0)} ms`,
-      detail: diff > 0 ? 'Slower on contact days (greater neuromuscular cost)' : 'No reaction time difference on contact days',
+      detail: `${sp.toFixed(0)} ms on sparring days vs ${ns.toFixed(0)} ms on non-sparring days. Reaction time measures how quickly the nervous system detects a signal and physically responds. ${diff > 0 ? `A ${diff.toFixed(0)} ms slower response on sparring days suggests the neuromuscular system is under greater stress following head contact — even small increases can reflect meaningful changes in neural processing speed` : 'No meaningful difference in neuromuscular response speed between session types'}.`,
       color: diff > 0 ? T.accent : T.accent3,
       sig: rt.sparring?.p_value != null && rt.sparring.p_value < 0.05,
     })
@@ -508,9 +521,6 @@ function H1Charts({ data }) {
             </>
           )
         }
-        {data.eeg_n_note && (
-          <p className="text-xs mt-3" style={{ color: '#9A4F00', fontFamily: T.sans }}>⚠ {data.eeg_n_note}</p>
-        )}
       </Card>
 
       {/* EEG */}
@@ -830,42 +840,42 @@ const GLOSSARY = [
     proxy: 'Cortical arousal response',
     formula: 'α_EC − α_EO (8–12 Hz)',
     direction: 'Higher = stronger suppression = more aroused',
-    citation: 'Klimesch (1999) Brain Res Rev; Oakes et al. (2017) NeuroImage: Clinical',
+    citationLinks: [{ text: 'Klimesch (1999) Brain Research Reviews', url: 'https://doi.org/10.1016/S0165-0173(98)00056-3' }],
   },
   {
     metric: 'Alpha/Theta Ratio',
     proxy: 'Cognitive readiness index',
     formula: 'α_EO / θ_EO (8–12 Hz / 4–8 Hz)',
     direction: 'Higher = more alert and cognitively ready',
-    citation: 'Klimesch (1999); Strangman et al. (2018) Concussion',
+    citationLinks: [{ text: 'Klimesch (1999) Brain Research Reviews', url: 'https://doi.org/10.1016/S0165-0173(98)00056-3' }],
   },
   {
     metric: 'Rel. Alpha EO',
     proxy: 'Arousal state (session-normalized)',
     formula: 'α_EO / Σband_power_EO (1–45 Hz)',
     direction: 'Higher = greater proportion of power in arousal band',
-    citation: 'Nunez & Srinivasan (2006) Electric Fields of the Brain',
+    citationLinks: [{ text: 'Nunez & Srinivasan (2006) Electric Fields of the Brain', url: 'https://www.academia.edu/63514950/Electric_Fields_of_the_Brain_The_Neurophysics_of_EEG_second_ed_Paul_L_Nunez_Ramesh_Srinivasan_Oxford_University_Press_Oxford_2005_611_pages_ISBN_0_19_505038_7' }],
   },
   {
     metric: 'Rel. Theta EO',
     proxy: 'Cognitive load / neural fatigue',
     formula: 'θ_EO / Σband_power_EO (1–45 Hz)',
     direction: 'Lower = less fatigue signature in EEG',
-    citation: 'Slobounov et al. (2010) J Neural Eng; Guskiewicz et al. (2003) JAMA',
+    citationLinks: [{ text: 'Klimesch (1999) Brain Research Reviews', url: 'https://doi.org/10.1016/S0165-0173(98)00056-3' }],
   },
   {
     metric: 'Readiness (ms)',
     proxy: 'Neuromuscular reaction speed',
-    formula: 'Pison EMG-based reaction time (wrist)',
+    formula: 'Pison wrist-band EMG reaction time',
     direction: 'Lower = faster response = better neuromuscular state',
-    citation: 'Strangman et al. (2018) Concussion; Pison Technology (2023)',
+    citationLinks: [],
   },
   {
     metric: 'Agility (/100)',
     proxy: 'Motor inhibition / go-no-go control',
     formula: 'Pison composite go/no-go accuracy score',
     direction: 'Higher = better motor control and decision speed',
-    citation: 'Pison Technology (2023); Greenwald et al. (2008) J Head Trauma Rehabil',
+    citationLinks: [],
   },
 ]
 
@@ -886,7 +896,12 @@ function MetricGlossary() {
               </p>
               <p className="text-xs" style={{ color: T.dimText, fontFamily: 'monospace' }}>{g.formula}</p>
               <p className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>{g.direction}</p>
-              <p className="text-xs italic mt-0.5" style={{ color: '#AEAEAE', fontFamily: T.sans }}>{g.citation}</p>
+              {g.citationLinks?.map((l, i) => (
+                <a key={i} href={l.url} target="_blank" rel="noreferrer"
+                  className="text-xs italic hover:underline block mt-0.5" style={{ color: '#AEAEAE' }}>
+                  {l.text}
+                </a>
+              ))}
             </div>
           </div>
         ))}
@@ -957,8 +972,7 @@ export default function Dashboard() {
             Sparring vs Non-Sparring Days
             <Info
               title="A/B Analysis: Sparring vs Non-Sparring"
-              formula="Mann-Whitney U (non-parametric; appropriate for n<30)\nCohen's d = (μ₁ − μ₂) / √((σ₁² + σ₂²) / 2)"
-              citation="Coutts et al. (2007) EJAP; bars show 90% bootstrap CI"
+              formula="Mann-Whitney U (non-parametric; appropriate for n<30)\nCohen's d = (μ₁ − μ₂) / √((σ₁² + σ₂²) / 2)\n90% bootstrap confidence intervals"
             />
           </h2>
 
@@ -981,7 +995,8 @@ export default function Dashboard() {
             <Info
               title="Longitudinal trend analysis"
               formula="Weekly mean per metric · contact_score = mean(None→0, Low→1, Med→2, High→3)"
-              citation="Dashnaw et al. (2012) Sports Health — cumulative sub-concussive exposure; Lempke et al. (2020)"
+              citation="Repetitive subconcussive head impacts produce cumulative, season-long white matter microstructural changes detectable via neuroimaging."
+              citationLinks={[{ text: 'Kwiatkowski et al. (2024) Human Brain Mapping', url: 'https://doi.org/10.1002/hbm.26811' }]}
             />
           </h2>
 
@@ -1004,7 +1019,7 @@ export default function Dashboard() {
             <Info
               title="Spearman ρ correlation matrix"
               formula="Spearman ρ for all pairs — handles ordinal (head contact) × continuous and small n\nPre-session EEG readings used as daily neurological baseline"
-              citation="Siegel (1956) Nonparametric Statistics — Spearman appropriate for ordinal×continuous; Slobounov et al. (2010)"
+              citation="Spearman ρ makes no assumption about data distribution and handles ordinal variables (head contact scale) mixed with continuous EEG/ENG measures — appropriate for this dataset's small n and non-normal distributions."
             />
           </h2>
 
