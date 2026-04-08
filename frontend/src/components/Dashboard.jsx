@@ -181,42 +181,79 @@ function KeyFindings({ data }) {
   if (!data) return null
   const findings = []
 
+  // Alpha/Theta — delta (post − pre on sparring vs non-sparring days)
   const atr = data.abSparring?.eeg?.alpha_theta_ratio
-  if (atr?.sparring?.mean != null && atr?.non_sparring?.mean != null) {
+  const atrDeltaSp = atr?.delta_sparring?.mean
+  const atrDeltaNs = atr?.delta_non_sparring?.mean
+  if (atrDeltaSp != null && atrDeltaNs != null) {
+    const diff = atrDeltaSp - atrDeltaNs
+    findings.push({
+      label: 'Alpha/Theta Ratio — session delta (sparring vs non-sparring)',
+      value: `${diff >= 0 ? '+' : ''}${diff.toFixed(3)}`,
+      detail: `On sparring days, alpha/theta drops ${Math.abs(atrDeltaSp).toFixed(3)} on average from pre- to post-session (non-sparring: ${atrDeltaNs >= 0 ? '+' : ''}${atrDeltaNs.toFixed(3)}). This ratio measures how alert and cognitively sharp the brain is — a ${atrDeltaSp < 0 ? 'larger drop after sparring suggests head contact acutely suppresses cognitive readiness more than standard training' : 'similar or smaller drop after sparring — no differential suppression detected'}.`,
+      color: atrDeltaSp < atrDeltaNs ? T.accent : T.accent3,
+      sig: atr.significant,
+    })
+  } else if (atr?.sparring?.mean != null && atr?.non_sparring?.mean != null) {
+    // Fallback to avg if no delta data
     const sp = atr.sparring.mean, ns = atr.non_sparring.mean
     const diff = sp - ns
     findings.push({
       label: 'Alpha/Theta Ratio — sparring vs non-sparring',
       value: `${diff >= 0 ? '+' : ''}${diff.toFixed(3)}`,
-      detail: `${sp.toFixed(3)} on sparring days vs ${ns.toFixed(3)} on non-sparring days. This ratio reflects how alert and cognitively ready the brain is — higher alpha relative to theta signals a focused, ready mind. A ${diff < 0 ? `${Math.abs(diff).toFixed(3)} point drop on sparring days suggests the brain is carrying more mental fatigue and less cognitive sharpness after head contact` : 'higher ratio on sparring days suggests no decline in cognitive readiness'}.`,
+      detail: `${sp.toFixed(3)} on sparring days vs ${ns.toFixed(3)} on non-sparring days. A ${diff < 0 ? `${Math.abs(diff).toFixed(3)} lower ratio on sparring days suggests reduced cognitive readiness following head contact` : 'higher ratio on sparring days — no decline in cognitive readiness'}.`,
       color: T.accent2,
-      sig: atr.sparring?.p_value != null && atr.sparring.p_value < 0.05,
+      sig: atr.significant,
     })
   }
 
+  // Alpha Reactivity — delta
   const ar = data.abSparring?.eeg?.alpha_reactivity
-  if (ar?.sparring?.mean != null && ar?.non_sparring?.mean != null) {
+  const arDeltaSp = ar?.delta_sparring?.mean
+  const arDeltaNs = ar?.delta_non_sparring?.mean
+  if (arDeltaSp != null && arDeltaNs != null) {
+    const diff = arDeltaSp - arDeltaNs
+    findings.push({
+      label: 'Alpha Reactivity — session delta (sparring vs non-sparring)',
+      value: EEG_DEFS.alpha_reactivity.fmt(diff),
+      detail: `On sparring days, alpha reactivity changes by ${EEG_DEFS.alpha_reactivity.fmt(arDeltaSp)} from pre to post (non-sparring: ${EEG_DEFS.alpha_reactivity.fmt(arDeltaNs)}). When you open your eyes, a healthy brain suppresses alpha waves — signaling a shift into an alert state. A ${arDeltaSp < arDeltaNs ? 'larger decline on sparring days suggests the arousal mechanism is more blunted after head contact than after regular training' : 'similar change across session types — no differential arousal blunting'}.`,
+      color: arDeltaSp < arDeltaNs ? T.accent : T.accent3,
+      sig: ar.significant,
+    })
+  } else if (ar?.sparring?.mean != null && ar?.non_sparring?.mean != null) {
     const sp = ar.sparring.mean, ns = ar.non_sparring.mean
     const diff = sp - ns
     findings.push({
       label: 'Alpha Reactivity — sparring vs non-sparring',
       value: EEG_DEFS.alpha_reactivity.fmt(diff),
-      detail: `${EEG_DEFS.alpha_reactivity.fmt(sp)} on sparring days vs ${EEG_DEFS.alpha_reactivity.fmt(ns)} on non-sparring days. When you open your eyes, a healthy brain suppresses its alpha waves — a sign it has shifted into an alert, active state. A ${diff < 0 ? 'weaker suppression on sparring days suggests the brain\'s arousal mechanism is blunted, a pattern seen after neurological stress from head impact' : 'similar or stronger suppression on sparring days — no evidence of blunted arousal response'}.`,
+      detail: `${EEG_DEFS.alpha_reactivity.fmt(sp)} on sparring days vs ${EEG_DEFS.alpha_reactivity.fmt(ns)} on non-sparring days. ${diff < 0 ? 'Weaker cortical arousal response on contact days — consistent with H1.' : 'No differential suppression between session types.'}`,
       color: diff < 0 ? T.accent : T.accent3,
-      sig: ar.sparring?.p_value != null && ar.sparring.p_value < 0.05,
+      sig: ar.significant,
     })
   }
 
+  // Reaction Time — delta
   const rt = data.abSparring?.pison?.readiness_ms
-  if (rt?.sparring?.mean != null && rt?.non_sparring?.mean != null) {
+  const rtDeltaSp = rt?.delta_sparring?.mean
+  const rtDeltaNs = rt?.delta_non_sparring?.mean
+  if (rtDeltaSp != null && rtDeltaNs != null) {
+    const diff = rtDeltaSp - rtDeltaNs
+    findings.push({
+      label: 'Reaction Time — session delta (sparring vs non-sparring)',
+      value: `${diff >= 0 ? '+' : ''}${diff.toFixed(0)} ms`,
+      detail: `On sparring days, reaction time changes by ${rtDeltaSp >= 0 ? '+' : ''}${rtDeltaSp.toFixed(0)} ms from pre to post (non-sparring: ${rtDeltaNs >= 0 ? '+' : ''}${rtDeltaNs.toFixed(0)} ms). Reaction time measures how fast the nervous system responds to a stimulus. A ${rtDeltaSp > rtDeltaNs ? `${Math.abs(diff).toFixed(0)} ms greater slowing on sparring days points to elevated neuromuscular cost from head contact — even millisecond differences reflect real changes in neural processing speed` : 'similar or smaller change — no excess neuromuscular cost from sparring detected'}.`,
+      color: rtDeltaSp > rtDeltaNs ? T.accent : T.accent3,
+      sig: rt.significant,
+    })
+  } else if (rt?.sparring?.mean != null && rt?.non_sparring?.mean != null) {
     const sp = rt.sparring.mean, ns = rt.non_sparring.mean
     const diff = sp - ns
     findings.push({
       label: 'Reaction Time — sparring vs non-sparring',
       value: `${diff >= 0 ? '+' : ''}${diff.toFixed(0)} ms`,
-      detail: `${sp.toFixed(0)} ms on sparring days vs ${ns.toFixed(0)} ms on non-sparring days. Reaction time measures how quickly the nervous system detects a signal and physically responds. ${diff > 0 ? `A ${diff.toFixed(0)} ms slower response on sparring days suggests the neuromuscular system is under greater stress following head contact — even small increases can reflect meaningful changes in neural processing speed` : 'No meaningful difference in neuromuscular response speed between session types'}.`,
+      detail: `${sp.toFixed(0)} ms on sparring days vs ${ns.toFixed(0)} ms on non-sparring days. ${diff > 0 ? `A ${diff.toFixed(0)} ms slower response on sparring days suggests elevated neuromuscular stress from head contact.` : 'No meaningful reaction time difference between session types.'}`,
       color: diff > 0 ? T.accent : T.accent3,
-      sig: rt.sparring?.p_value != null && rt.sparring.p_value < 0.05,
+      sig: rt.significant,
     })
   }
 
@@ -224,9 +261,12 @@ function KeyFindings({ data }) {
 
   return (
     <Card className="p-5 mb-10">
-      <h2 className="text-xs uppercase tracking-widest mb-4" style={{ color: T.dimText, fontFamily: T.sans, letterSpacing: '0.1em' }}>
+      <h2 className="text-xs uppercase tracking-widest mb-1" style={{ color: T.dimText, fontFamily: T.sans, letterSpacing: '0.1em' }}>
         Key Findings
       </h2>
+      <p className="text-xs mb-4" style={{ color: T.dimText, fontFamily: T.sans }}>
+        Pre→post session delta · sparring vs non-sparring days
+      </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {findings.map((f, i) => (
           <div key={i} className="p-3 rounded"
@@ -254,41 +294,60 @@ function KeyFindings({ data }) {
 function buildH1Interpretation(data) {
   if (!data) return null
   const lines = []
+  let supportCount = 0, totalCount = 0
 
   const ar = data.eeg?.alpha_reactivity
-  if (ar?.sparring?.mean != null && ar?.non_sparring?.mean != null) {
-    const sp = ar.sparring.mean, ns = ar.non_sparring.mean
-    const dir = sp < ns ? 'lower' : 'higher'
-    const pStr = ar.sparring?.p_value != null ? ` (p = ${ar.sparring.p_value})` : ''
-    lines.push(
-      `Alpha reactivity was ${dir} on sparring days (${EEG_DEFS.alpha_reactivity.fmt(sp)} vs ${EEG_DEFS.alpha_reactivity.fmt(ns)})${pStr} — ${sp < ns ? 'blunted arousal response consistent with H1' : 'no suppression observed'}.`
-    )
+  if (ar) {
+    const sp = ar.delta_sparring?.mean ?? ar.sparring?.mean
+    const ns = ar.delta_non_sparring?.mean ?? ar.non_sparring?.mean
+    const isDelta = ar.delta_sparring?.mean != null
+    if (sp != null && ns != null) {
+      totalCount++
+      const dir = sp < ns ? (isDelta ? 'larger decline' : 'lower') : (isDelta ? 'smaller decline' : 'higher')
+      const pStr = ar.p_value != null ? ` (p = ${ar.p_value})` : ''
+      const support = sp < ns
+      if (support) supportCount++
+      lines.push(
+        `Alpha reactivity ${isDelta ? `delta: ${EEG_DEFS.alpha_reactivity.fmt(sp)} on sparring vs ${EEG_DEFS.alpha_reactivity.fmt(ns)} on non-sparring days` : `was ${dir} on sparring days (${EEG_DEFS.alpha_reactivity.fmt(sp)} vs ${EEG_DEFS.alpha_reactivity.fmt(ns)})`}${pStr} — ${support ? 'blunted arousal response consistent with H1' : 'no differential suppression'}.`
+      )
+    }
   }
 
   const atr = data.eeg?.alpha_theta_ratio
-  if (atr?.sparring?.mean != null && atr?.non_sparring?.mean != null) {
-    const sp = atr.sparring.mean, ns = atr.non_sparring.mean
-    const dir = sp < ns ? 'lower' : 'higher'
-    const d = atr.sparring?.cohens_d
-    lines.push(
-      `Alpha/theta ratio (EEG) was ${dir} on sparring days (${sp.toFixed(3)} vs ${ns.toFixed(3)})${d != null ? `, Cohen's d = ${Math.abs(d).toFixed(2)}` : ''} — ${sp < ns ? 'reduced cognitive readiness index on contact days (Klimesch, 1999)' : 'no reduction in cognitive readiness index'}.`
-    )
+  if (atr) {
+    const sp = atr.delta_sparring?.mean ?? atr.sparring?.mean
+    const ns = atr.delta_non_sparring?.mean ?? atr.non_sparring?.mean
+    const isDelta = atr.delta_sparring?.mean != null
+    if (sp != null && ns != null) {
+      totalCount++
+      const support = sp < ns
+      if (support) supportCount++
+      const d = atr.cohens_d
+      lines.push(
+        `Alpha/theta ratio (EEG) ${isDelta ? `delta: ${sp.toFixed(3)} on sparring vs ${ns.toFixed(3)} on non-sparring` : `was ${sp < ns ? 'lower' : 'higher'} on sparring days (${sp.toFixed(3)} vs ${ns.toFixed(3)})`}${d != null ? `, Cohen's d = ${Math.abs(d).toFixed(2)}` : ''} — ${support ? 'reduced cognitive readiness on contact days (Klimesch, 1999)' : 'no reduction in cognitive readiness index'}.`
+      )
+    }
   }
 
   const rt = data.pison?.readiness_ms
-  if (rt?.sparring?.mean != null && rt?.non_sparring?.mean != null) {
-    const sp = rt.sparring.mean, ns = rt.non_sparring.mean
-    const dir = sp > ns ? 'slower' : 'faster'
-    const d = rt.sparring?.cohens_d
-    lines.push(
-      `Reaction time (ENG) was ${dir} on sparring days (${sp.toFixed(0)} ms vs ${ns.toFixed(0)} ms)${d != null ? `, d = ${Math.abs(d).toFixed(2)}` : ''} — ${sp > ns ? 'elevated neuromuscular cost on contact days' : 'no reaction time difference by session type'}.`
-    )
+  if (rt) {
+    const sp = rt.delta_sparring?.mean ?? rt.sparring?.mean
+    const ns = rt.delta_non_sparring?.mean ?? rt.non_sparring?.mean
+    const isDelta = rt.delta_sparring?.mean != null
+    if (sp != null && ns != null) {
+      totalCount++
+      const support = sp > ns
+      if (support) supportCount++
+      const d = rt.cohens_d
+      lines.push(
+        `Reaction time (ENG) ${isDelta ? `delta: ${sp >= 0 ? '+' : ''}${sp.toFixed(0)} ms on sparring vs ${ns >= 0 ? '+' : ''}${ns.toFixed(0)} ms on non-sparring` : `was ${sp > ns ? 'slower' : 'faster'} on sparring days (${sp.toFixed(0)} ms vs ${ns.toFixed(0)} ms)`}${d != null ? `, d = ${Math.abs(d).toFixed(2)}` : ''} — ${support ? 'elevated neuromuscular cost on contact days' : 'no reaction time difference by session type'}.`
+      )
+    }
   }
 
   if (!lines.length) return null
-  const allSupport = lines.every(l => l.includes('consistent with H1') || l.includes('reduced') || l.includes('elevated neuromuscular'))
-  lines.push(allSupport
-    ? 'Overall: early evidence supports H1 — contact sessions produce measurable suppression across both EEG and ENG domains. Statistical confidence is limited by small n; interpret directionally.'
+  lines.push(supportCount >= 2
+    ? 'Overall: early evidence supports H1 — contact sessions produce measurable acute suppression across both EEG and ENG domains. Statistical confidence is limited by small n; interpret directionally.'
     : 'Overall: findings are mixed. Continue collecting sessions to reach adequate statistical power.'
   )
   return lines
@@ -382,7 +441,7 @@ function buildRQ2Interpretation(data) {
 
 // ─── H1: Metric row (small multiple) ─────────────────────────────────────────
 
-function MetricRow({ metricKey, sparring, nonSparring }) {
+function MetricRow({ metricKey, sparring, nonSparring, showStats, pValue, significant }) {
   const def = EEG_DEFS[metricKey]
   if (!def) return null
   const sp  = sparring?.mean
@@ -396,9 +455,8 @@ function MetricRow({ metricKey, sparring, nonSparring }) {
         <span className="text-xs font-semibold flex items-center" style={{ color: T.subtext, fontFamily: T.sans }}>
           {def.label}
           <Info {...def.info} />
-          {sparring?.insufficient_n && <span className="ml-2 font-normal" style={{ color: '#9A4F00' }}>⚠ small n</span>}
         </span>
-        {sparring?.cohens_d != null && <CohensBadge d={sparring.cohens_d} />}
+        {showStats && sparring?.cohens_d != null && <CohensBadge d={sparring.cohens_d} />}
       </div>
       {[
         { label: 'Sparring',     val: sp,  color: T.accent,  n: sparring?.n },
@@ -417,9 +475,9 @@ function MetricRow({ metricKey, sparring, nonSparring }) {
           </span>
         </div>
       ))}
-      {sparring?.p_value != null && (
-        <p className="text-xs mt-1" style={{ color: sparring.p_value < 0.05 ? '#9A4F00' : T.dimText, fontFamily: T.sans }}>
-          Mann-Whitney U p = {sparring.p_value}{sparring.significant ? ' ★' : ''}
+      {showStats && pValue != null && (
+        <p className="text-xs mt-1" style={{ color: pValue < 0.05 ? '#9A4F00' : T.dimText, fontFamily: T.sans }}>
+          Mann-Whitney U p = {pValue}{significant ? ' ★' : ''}
           {def.higherBetter ? ' · higher = better' : ' · lower = better'}
         </p>
       )}
@@ -468,7 +526,23 @@ function ENGRow({ label, sparring, nonSparring, lowerBetter, fmt, pValue, cohens
 
 // ─── H1: Side-by-side ENG + EEG cards ────────────────────────────────────────
 
-function H1Charts({ data }) {
+const H1_VIEWS = [
+  { key: 'delta', label: 'Δ Delta', desc: 'post − pre per session' },
+  { key: 'avg',   label: 'Avg',     desc: 'all readings averaged' },
+  { key: 'pre',   label: 'Pre',     desc: 'pre-session only' },
+  { key: 'post',  label: 'Post',    desc: 'post-session only' },
+]
+
+function getViewPair(metric, view) {
+  if (!metric) return { sparring: null, nonSparring: null }
+  if (view === 'avg')   return { sparring: metric.sparring,      nonSparring: metric.non_sparring }
+  if (view === 'pre')   return { sparring: metric.pre_sparring,  nonSparring: metric.pre_non_sparring }
+  if (view === 'post')  return { sparring: metric.post_sparring, nonSparring: metric.post_non_sparring }
+  if (view === 'delta') return { sparring: metric.delta_sparring, nonSparring: metric.delta_non_sparring }
+  return { sparring: metric.sparring, nonSparring: metric.non_sparring }
+}
+
+function H1Charts({ data, activeView, onViewChange }) {
   if (!data) return <Skeleton />
 
   const eeg = data.eeg ?? {}
@@ -478,76 +552,111 @@ function H1Charts({ data }) {
   const hasENG = Object.keys(pison).some(k => pison[k]?.sparring?.mean != null)
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-      {/* ENG */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: T.accent3, fontFamily: T.sans, letterSpacing: '0.08em' }}>
-            ENG — Pison
-          </h3>
-          <span className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>Neuromuscular</span>
-        </div>
-        <p className="text-xs mb-3" style={{ color: T.dimText, fontFamily: T.sans }}>
-          Sparring vs non-sparring · Mann-Whitney U
-        </p>
-        {!hasENG
-          ? <p className="text-xs py-6 text-center" style={{ color: T.dimText, fontFamily: T.sans }}>No Pison data yet.</p>
-          : (
-            <>
-              {pison.readiness_ms && (
-                <ENGRow
-                  label="Readiness (reaction time)"
-                  sparring={pison.readiness_ms.sparring}
-                  nonSparring={pison.readiness_ms.non_sparring}
-                  lowerBetter
-                  fmt={v => v != null ? `${v.toFixed(0)} ms` : '—'}
-                  pValue={pison.readiness_ms.p_value}
-                  cohensD={pison.readiness_ms.sparring?.cohens_d}
-                  significant={pison.readiness_ms.significant}
-                />
-              )}
-              {pison.agility && (
-                <ENGRow
-                  label="Agility (go/no-go score)"
-                  sparring={pison.agility.sparring}
-                  nonSparring={pison.agility.non_sparring}
-                  lowerBetter={false}
-                  fmt={v => v != null ? v.toFixed(1) : '—'}
-                  pValue={pison.agility.p_value}
-                  cohensD={pison.agility.sparring?.cohens_d}
-                  significant={pison.agility.significant}
-                />
-              )}
-            </>
-          )
-        }
-      </Card>
+    <div>
+      {/* View toggle */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-xs font-semibold" style={{ color: T.dimText, fontFamily: T.sans }}>View:</span>
+        {H1_VIEWS.map(v => (
+          <button key={v.key} onClick={() => onViewChange(v.key)}
+            title={v.desc}
+            className="text-xs px-3 py-1 rounded transition-all"
+            style={{
+              background: activeView === v.key ? T.accent : T.bg,
+              color: activeView === v.key ? '#fff' : T.subtext,
+              border: `1px solid ${activeView === v.key ? T.accent : T.border}`,
+              fontFamily: T.sans,
+              fontWeight: activeView === v.key ? 600 : 400,
+            }}>
+            {v.label}
+          </button>
+        ))}
+        <span className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>
+          — {H1_VIEWS.find(v => v.key === activeView)?.desc}
+        </span>
+      </div>
 
-      {/* EEG */}
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: T.accent2, fontFamily: T.sans, letterSpacing: '0.08em' }}>
-            EEG — Neurable MW75
-          </h3>
-          <span className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>Cortical</span>
-        </div>
-        <p className="text-xs mb-3" style={{ color: T.dimText, fontFamily: T.sans }}>
-          Sparring vs non-sparring · Mann-Whitney U
-        </p>
-        {!hasEEG
-          ? <p className="text-xs py-6 text-center" style={{ color: T.dimText, fontFamily: T.sans }}>No EEG data yet.</p>
-          : ['alpha_reactivity', 'alpha_theta_ratio', 'rel_alpha_eo', 'rel_theta_eo'].map(k => (
-              eeg[k] ? (
-                <MetricRow
-                  key={k}
-                  metricKey={k}
-                  sparring={eeg[k].sparring}
-                  nonSparring={eeg[k].non_sparring}
-                />
-              ) : null
-            ))
-        }
-      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* ENG */}
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: T.accent3, fontFamily: T.sans, letterSpacing: '0.08em' }}>
+              ENG — Pison
+            </h3>
+            <span className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>Neuromuscular</span>
+          </div>
+          <p className="text-xs mb-3" style={{ color: T.dimText, fontFamily: T.sans }}>
+            Sparring vs non-sparring · Mann-Whitney U
+          </p>
+          {!hasENG
+            ? <p className="text-xs py-6 text-center" style={{ color: T.dimText, fontFamily: T.sans }}>No Pison data yet.</p>
+            : (
+              <>
+                {pison.readiness_ms && (() => {
+                  const { sparring: sp, nonSparring: ns } = getViewPair(pison.readiness_ms, activeView)
+                  return (
+                    <ENGRow
+                      label="Readiness (reaction time)"
+                      sparring={sp}
+                      nonSparring={ns}
+                      lowerBetter={activeView !== 'delta'}
+                      fmt={v => v != null ? `${v.toFixed(0)} ms` : '—'}
+                      pValue={activeView === 'avg' ? pison.readiness_ms.p_value : null}
+                      cohensD={activeView === 'avg' ? pison.readiness_ms.sparring?.cohens_d : null}
+                      significant={activeView === 'avg' ? pison.readiness_ms.significant : false}
+                    />
+                  )
+                })()}
+                {pison.agility && (() => {
+                  const { sparring: sp, nonSparring: ns } = getViewPair(pison.agility, activeView)
+                  return (
+                    <ENGRow
+                      label="Agility (go/no-go score)"
+                      sparring={sp}
+                      nonSparring={ns}
+                      lowerBetter={false}
+                      fmt={v => v != null ? v.toFixed(1) : '—'}
+                      pValue={activeView === 'avg' ? pison.agility.p_value : null}
+                      cohensD={activeView === 'avg' ? pison.agility.sparring?.cohens_d : null}
+                      significant={activeView === 'avg' ? pison.agility.significant : false}
+                    />
+                  )
+                })()}
+              </>
+            )
+          }
+        </Card>
+
+        {/* EEG */}
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: T.accent2, fontFamily: T.sans, letterSpacing: '0.08em' }}>
+              EEG — Neurable MW75
+            </h3>
+            <span className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>Cortical</span>
+          </div>
+          <p className="text-xs mb-3" style={{ color: T.dimText, fontFamily: T.sans }}>
+            Sparring vs non-sparring · Mann-Whitney U
+          </p>
+          {!hasEEG
+            ? <p className="text-xs py-6 text-center" style={{ color: T.dimText, fontFamily: T.sans }}>No EEG data yet.</p>
+            : ['alpha_reactivity', 'alpha_theta_ratio', 'rel_alpha_eo', 'rel_theta_eo'].map(k => {
+                if (!eeg[k]) return null
+                const { sparring: sp, nonSparring: ns } = getViewPair(eeg[k], activeView)
+                return (
+                  <MetricRow
+                    key={k}
+                    metricKey={k}
+                    sparring={sp}
+                    nonSparring={ns}
+                    showStats={activeView === 'avg'}
+                    pValue={activeView === 'avg' ? eeg[k].p_value : null}
+                    significant={activeView === 'avg' ? eeg[k].significant : false}
+                  />
+                )
+              })
+          }
+        </Card>
+      </div>
     </div>
   )
 }
@@ -721,7 +830,7 @@ function CorrelationMatrix({ data }) {
     )
   ))
 
-  // Rows
+  // Rows (upper triangle only: show cells where j >= i)
   matrix.forEach((row, i) => {
     cells.push(
       <div key={`rh-${i}`} style={{
@@ -734,6 +843,11 @@ function CorrelationMatrix({ data }) {
     )
 
     row.forEach((cell, j) => {
+      if (j < i) {
+        // Lower triangle — blank spacer
+        cells.push(<div key={`c-${i}-${j}`} style={{ height: `${CELL_SIZE}px` }} />)
+        return
+      }
       const isDiag = i === j
       cells.push(
         <div
@@ -749,7 +863,7 @@ function CorrelationMatrix({ data }) {
             alignItems: 'center',
             justifyContent: 'center',
             cursor: isDiag ? 'default' : 'crosshair',
-            border: `1px solid ${T.border}`,
+            border: `1px solid ${isDiag ? T.border : corrColor(cell?.rho) === '#E8E4DC' ? T.border : 'transparent'}`,
             gap: '2px',
           }}
         >
@@ -758,10 +872,10 @@ function CorrelationMatrix({ data }) {
             color: isDiag ? T.subtext : corrTextColor(cell?.rho),
             fontFamily: T.sans,
           }}>
-            {cell?.rho != null ? cell.rho.toFixed(2) : '—'}
+            {isDiag ? '—' : (cell?.rho != null ? cell.rho.toFixed(2) : '—')}
           </span>
           {!isDiag && cell?.p_value != null && cell.p_value < 0.05 && (
-            <span style={{ fontSize: '9px', color: isDiag ? T.dimText : corrTextColor(cell?.rho), opacity: 0.85, fontFamily: T.sans }}>
+            <span style={{ fontSize: '9px', color: corrTextColor(cell?.rho), opacity: 0.85, fontFamily: T.sans }}>
               ★
             </span>
           )}
@@ -921,6 +1035,7 @@ function MetricGlossary() {
 
 export default function Dashboard() {
   const { data, loading, error } = useDashboardData()
+  const [h1View, setH1View] = useState('delta')
 
   if (error) return (
     <div style={{ background: T.bg }} className="min-h-screen flex items-center justify-center">
@@ -976,7 +1091,7 @@ export default function Dashboard() {
             />
           </h2>
 
-          {loading ? <Skeleton h="h-80" /> : <H1Charts data={data?.abSparring} />}
+          {loading ? <Skeleton h="h-80" /> : <H1Charts data={data?.abSparring} activeView={h1View} onViewChange={setH1View} />}
 
           {!loading && (
             <InterpretationBox lines={buildH1Interpretation(data?.abSparring)} />
@@ -985,7 +1100,7 @@ export default function Dashboard() {
 
         {/* ── RQ1 ─────────────────────────────────────────────────────────── */}
         <section className="mb-12">
-          <SectionLabel tag="RQ1" tagColor={T.accent2}>
+          <SectionLabel tag="RQ1" tagColor="#7B5800">
             How do EEG and neuromuscular biomarkers evolve over the course of a 4-month boxing training
             camp — and is there evidence of cumulative neurological load or adaptation?
           </SectionLabel>

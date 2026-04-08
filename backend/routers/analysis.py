@@ -199,19 +199,59 @@ def get_ab_sparring():  # noqa: C901
     pison_daily["date_str"] = pison_daily["date"].dt.strftime("%Y-%m-%d")
     pison_daily["sparred"]  = pison_daily["date_str"].isin(sparring_dates).astype(int)
 
+    # Tag pre vs post readings from notes/tags field
+    notes_lower = pison_daily["notes"].fillna("").str.lower()
+    pison_daily["is_pre"]  = notes_lower.str.contains("pre-boxing|pre boxing|pre-sparring|pre sparring")
+    pison_daily["is_post"] = notes_lower.str.contains("post-boxing|post boxing|post-sparring|post sparring")
+
+    def _pison_stats(rows, sparred_val):
+        r = rows[rows["sparred"] == sparred_val]
+        per_day = r.groupby("date_str")["reading_value"].mean().values.astype(float)
+        lo, hi = _bootstrap_ci(per_day) if len(per_day) >= 2 else (None, None)
+        return {"mean": round(float(np.mean(per_day)), 3) if len(per_day) else None,
+                "ci_lo": lo, "ci_hi": hi, "n": int(len(per_day))}
+
     pison_results = {}
     for cat, label, col_out in [
         ("daily_readiness", "Readiness (ms)", "readiness_ms"),
         ("daily_agility",   "Agility (/100)", "agility"),
     ]:
         sub = pison_daily[pison_daily["category"] == cat]
-        # daily average per date
+        # avg view: daily average per date (all readings)
         avg = sub.groupby(["date_str", "sparred"])["reading_value"].mean().reset_index()
         spar   = avg[avg["sparred"] == 1]["reading_value"].values.astype(float)
         nospar = avg[avg["sparred"] == 0]["reading_value"].values.astype(float)
         r = _compare_metric(spar, nospar, label)
-        if r:
-            pison_results[col_out] = r
+        if not r:
+            continue
+
+        # pre/post views
+        r["pre_sparring"]      = _pison_stats(sub[sub["is_pre"]],  1)
+        r["pre_non_sparring"]  = _pison_stats(sub[sub["is_pre"]],  0)
+        r["post_sparring"]     = _pison_stats(sub[sub["is_post"]], 1)
+        r["post_non_sparring"] = _pison_stats(sub[sub["is_post"]], 0)
+
+        # delta view: post − pre per day
+        delta_rows_p = []
+        for date_str, grp in sub.groupby("date_str"):
+            pre_v  = grp[grp["is_pre"]]["reading_value"]
+            post_v = grp[grp["is_post"]]["reading_value"]
+            if pre_v.empty or post_v.empty:
+                continue
+            sv = int(grp["sparred"].iloc[0])
+            delta_rows_p.append({"sparred": sv, "delta": float(post_v.mean()) - float(pre_v.mean())})
+        if delta_rows_p:
+            ddf = pd.DataFrame(delta_rows_p)
+            for sv, key in [(1, "delta_sparring"), (0, "delta_non_sparring")]:
+                vals = ddf[ddf["sparred"] == sv]["delta"].values.astype(float)
+                lo, hi = _bootstrap_ci(vals) if len(vals) >= 2 else (None, None)
+                r[key] = {"mean": round(float(np.mean(vals)), 3) if len(vals) else None,
+                          "ci_lo": lo, "ci_hi": hi, "n": int(len(vals))}
+        else:
+            r["delta_sparring"]     = {"mean": None, "ci_lo": None, "ci_hi": None, "n": 0}
+            r["delta_non_sparring"] = {"mean": None, "ci_lo": None, "ci_hi": None, "n": 0}
+
+        pison_results[col_out] = r
 
     # ── EEG metrics ──────────────────────────────────────────────────────────
     eeg_df = eeg_pipeline.process_all_sessions()
@@ -224,6 +264,34 @@ def get_ab_sparring():  # noqa: C901
         n_nospar = int((eeg_df["sparred"] == 0).sum())
         eeg_n_note = f"EEG: n={n_spar} sparring, n={n_nospar} non-sparring sessions — interpret with caution"
 
+        eeg_pre  = eeg_df[eeg_df["timing"] == "pre"].copy()
+        eeg_post = eeg_df[eeg_df["timing"] == "post"].copy()
+
+        # Compute per-date delta (post − pre)
+        eeg_delta_rows = []
+        for date, grp in eeg_df.groupby("date"):
+            pre_row  = grp[grp["timing"] == "pre"]
+            post_row = grp[grp["timing"] == "post"]
+            if pre_row.empty or post_row.empty:
+                continue
+            row = {"date": date, "sparred": int(grp["sparred"].iloc[0])}
+            for _c in ["alpha_reactivity", "alpha_theta_ratio", "rel_alpha_eo", "rel_theta_eo"]:
+                if _c in grp.columns:
+                    pv   = pre_row[_c].dropna()
+                    posv = post_row[_c].dropna()
+                    if not pv.empty and not posv.empty:
+                        row[_c] = float(posv.iloc[0]) - float(pv.iloc[0])
+            eeg_delta_rows.append(row)
+        eeg_delta = pd.DataFrame(eeg_delta_rows) if eeg_delta_rows else pd.DataFrame()
+
+        def _eeg_group(df_sub, sparred_val, col):
+            if col not in df_sub.columns:
+                return {"mean": None, "ci_lo": None, "ci_hi": None, "n": 0}
+            vals = df_sub[df_sub["sparred"] == sparred_val][col].dropna().values.astype(float)
+            lo, hi = _bootstrap_ci(vals) if len(vals) >= 2 else (None, None)
+            return {"mean": round(float(np.mean(vals)), 4) if len(vals) else None,
+                    "ci_lo": lo, "ci_hi": hi, "n": int(len(vals))}
+
         eeg_metrics = {
             "alpha_reactivity":  "Alpha Reactivity",
             "alpha_theta_ratio": "Alpha/Theta Ratio",
@@ -235,7 +303,6 @@ def get_ab_sparring():  # noqa: C901
                 continue
             spar   = eeg_df[eeg_df["sparred"] == 1][col].dropna().values.astype(float)
             nospar = eeg_df[eeg_df["sparred"] == 0][col].dropna().values.astype(float)
-            # Skip U-test if too few, but still return means
             lo_s, hi_s = _bootstrap_ci(spar) if len(spar) >= 2 else (None, None)
             lo_n, hi_n = _bootstrap_ci(nospar) if len(nospar) >= 2 else (None, None)
             entry = {
@@ -243,6 +310,13 @@ def get_ab_sparring():  # noqa: C901
                 "sparring":     {"mean": round(float(np.mean(spar)), 4) if len(spar) else None, "ci_lo": lo_s, "ci_hi": hi_s, "n": len(spar)},
                 "non_sparring": {"mean": round(float(np.mean(nospar)), 4) if len(nospar) else None, "ci_lo": lo_n, "ci_hi": hi_n, "n": len(nospar)},
                 "insufficient_n": bool(len(spar) < 2 or len(nospar) < 2),
+                # pre/post/delta breakdowns
+                "pre_sparring":      _eeg_group(eeg_pre,   1, col),
+                "pre_non_sparring":  _eeg_group(eeg_pre,   0, col),
+                "post_sparring":     _eeg_group(eeg_post,  1, col),
+                "post_non_sparring": _eeg_group(eeg_post,  0, col),
+                "delta_sparring":    _eeg_group(eeg_delta, 1, col),
+                "delta_non_sparring":_eeg_group(eeg_delta, 0, col),
             }
             if len(spar) >= 2 and len(nospar) >= 2:
                 stat, pval = stats.mannwhitneyu(spar, nospar, alternative="two-sided")
@@ -557,6 +631,7 @@ def get_correlation_matrix():
     """
     VARS = [
         ("head_contact",      "Head Contact"),
+        ("headache",          "Headache"),
         ("readiness_ms",      "Readiness"),
         ("agility",           "Agility"),
         ("alpha_reactivity",  "Alpha Reactivity"),
@@ -565,11 +640,17 @@ def get_correlation_matrix():
         ("rel_theta_eo",      "Rel. Theta EO"),
     ]
 
-    # ── Survey: head contact (daily) ────────────────────────────────────────
+    # ── Survey: head contact + headache (daily) ─────────────────────────────
     survey = load_survey(filled_only=False)
     survey["date"] = pd.to_datetime(survey["date"]).dt.strftime("%Y-%m-%d")
     survey["head_contact"] = survey["head_contact_level"].map(CONTACT_MAP)
-    survey_slim = survey[["date", "head_contact"]].dropna(subset=["head_contact"])
+    survey_cols = ["date", "head_contact"]
+    if "headache" in survey.columns:
+        survey["headache_f"] = pd.to_numeric(survey["headache"], errors="coerce")
+        survey_cols.append("headache_f")
+    survey_slim = survey[survey_cols].dropna(subset=["head_contact"]).copy()
+    if "headache_f" in survey_slim.columns:
+        survey_slim = survey_slim.rename(columns={"headache_f": "headache"})
 
     # ── Pison: daily averages ───────────────────────────────────────────────
     pison = _load_pison()
