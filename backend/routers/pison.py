@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -10,69 +9,114 @@ from gcp import bq, DATASET
 
 router = APIRouter()
 
-CSV_PATH = Path(__file__).parents[2] / "pison" / "data" / "pison_extracted.csv"
 BASELINE_READINESS_MS = 123.0
 BASELINE_AGILITY = 80.0
 
+_EMPTY_DF = pd.DataFrame(columns=["date", "reading_timestamp", "category", "reading_value", "notes"])
 
-def _load_csv() -> pd.DataFrame:
-    if not CSV_PATH.exists():
-        return pd.DataFrame()
-    df = pd.read_csv(CSV_PATH)
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date.astype(str)
-    return df
+
+def _load_from_bq() -> pd.DataFrame:
+    """
+    Load Pison daily readings from BigQuery in tall format.
+    Returns columns: date, reading_timestamp, category, reading_value, notes
+    """
+    try:
+        query = (
+            "SELECT date, datetime, readiness_ms, agility_score, tags "
+            "FROM `boxsmart-492022.boxsmart.pison_readings` ORDER BY datetime"
+        )
+        raw = bq.query(query).to_dataframe()
+        rows = []
+        for _, r in raw.iterrows():
+            date_str = str(pd.to_datetime(r["date"]).date())
+            tags = str(r["tags"]) if pd.notna(r.get("tags")) else ""
+            dt_str = str(r["datetime"]) if pd.notna(r.get("datetime")) else ""
+            if pd.notna(r.get("readiness_ms")):
+                rows.append({"date": date_str, "reading_timestamp": dt_str,
+                             "category": "daily_readiness",
+                             "reading_value": float(r["readiness_ms"]), "notes": tags})
+            if pd.notna(r.get("agility_score")):
+                rows.append({"date": date_str, "reading_timestamp": dt_str,
+                             "category": "daily_agility",
+                             "reading_value": float(r["agility_score"]), "notes": tags})
+        return pd.DataFrame(rows) if rows else _EMPTY_DF.copy()
+    except Exception as e:
+        print(f"[pison] BQ query failed: {e}")
+        return _EMPTY_DF.copy()
+
+
+def _weekly_summary(daily: pd.DataFrame, baseline: float) -> list:
+    """Compute weekly aggregates from daily readings."""
+    if daily.empty:
+        return []
+    df = daily.copy()
+    df["date_dt"] = pd.to_datetime(df["date"])
+    iso = df["date_dt"].dt.isocalendar()
+    df["year"] = iso["year"].values
+    df["week"] = iso["week"].values
+    agg = (
+        df.groupby(["year", "week"])
+        .agg(summary_value=("reading_value", "mean"),
+             week_start=("date_dt", "min"),
+             week_end=("date_dt", "max"))
+        .reset_index()
+    )
+    agg["vs_baseline_pct"] = ((agg["summary_value"] - baseline) / baseline * 100).round(1)
+    agg["vs_baseline_direction"] = agg["vs_baseline_pct"].apply(
+        lambda x: "above" if x > 0 else ("below" if x < 0 else "at")
+    )
+    agg["summary_value"] = agg["summary_value"].round(1)
+    agg["week_start"] = agg["week_start"].dt.date.astype(str)
+    agg["week_end"] = agg["week_end"].dt.date.astype(str)
+    return agg[["week_start", "week_end", "summary_value", "vs_baseline_pct", "vs_baseline_direction"]].to_dict(orient="records")
 
 
 @router.get("/readiness")
 def get_readiness():
     """Weekly and daily readiness (reaction time, ms) series."""
-    df = _load_csv()
-    weekly = df[df["category"] == "weekly_readiness"].copy()
-    weekly = weekly[weekly["summary_value"].notna()][
-        ["date", "week_start", "week_end", "summary_value", "vs_baseline_pct", "vs_baseline_direction"]
-    ].rename(columns={"summary_value": "score_ms"})
-
+    df = _load_from_bq()
     daily = df[df["category"] == "daily_readiness"].copy()
-    daily = daily[daily["reading_value"].notna()][
-        ["date", "reading_timestamp", "reading_value", "reading_vs_baseline_pct", "reading_vs_baseline_direction", "notes"]
-    ].rename(columns={"reading_value": "score_ms", "reading_timestamp": "timestamp",
-                      "reading_vs_baseline_pct": "vs_baseline_pct",
-                      "reading_vs_baseline_direction": "vs_baseline_direction"})
+
+    daily_out = daily[["date", "reading_timestamp", "reading_value", "notes"]].rename(
+        columns={"reading_value": "score_ms", "reading_timestamp": "timestamp"}
+    )
+    daily_out["vs_baseline_pct"] = ((daily_out["score_ms"] - BASELINE_READINESS_MS) / BASELINE_READINESS_MS * 100).round(1)
+    daily_out["vs_baseline_direction"] = daily_out["vs_baseline_pct"].apply(
+        lambda x: "above" if x > 0 else ("below" if x < 0 else "at")
+    )
 
     return {
         "baseline_ms": BASELINE_READINESS_MS,
-        "weekly": weekly.where(weekly.notna(), None).to_dict(orient="records"),
-        "daily": daily.where(daily.notna(), None).to_dict(orient="records"),
+        "weekly": _weekly_summary(daily, BASELINE_READINESS_MS),
+        "daily": daily_out.where(daily_out.notna(), None).to_dict(orient="records"),
     }
 
 
 @router.get("/agility")
 def get_agility():
     """Weekly and daily agility (go-no-go score, 0–100) series."""
-    df = _load_csv()
-    weekly = df[df["category"] == "weekly_agility"].copy()
-    weekly = weekly[weekly["summary_value"].notna()][
-        ["date", "week_start", "week_end", "summary_value", "vs_baseline_pct", "vs_baseline_direction"]
-    ].rename(columns={"summary_value": "score"})
-
+    df = _load_from_bq()
     daily = df[df["category"] == "daily_agility"].copy()
-    daily = daily[daily["reading_value"].notna()][
-        ["date", "reading_timestamp", "reading_value", "reading_vs_baseline_pct", "reading_vs_baseline_direction", "notes"]
-    ].rename(columns={"reading_value": "score", "reading_timestamp": "timestamp",
-                      "reading_vs_baseline_pct": "vs_baseline_pct",
-                      "reading_vs_baseline_direction": "vs_baseline_direction"})
+
+    daily_out = daily[["date", "reading_timestamp", "reading_value", "notes"]].rename(
+        columns={"reading_value": "score", "reading_timestamp": "timestamp"}
+    )
+    daily_out["vs_baseline_pct"] = ((daily_out["score"] - BASELINE_AGILITY) / BASELINE_AGILITY * 100).round(1)
+    daily_out["vs_baseline_direction"] = daily_out["vs_baseline_pct"].apply(
+        lambda x: "above" if x > 0 else ("below" if x < 0 else "at")
+    )
 
     return {
         "baseline": BASELINE_AGILITY,
-        "weekly": weekly.where(weekly.notna(), None).to_dict(orient="records"),
-        "daily": daily.where(daily.notna(), None).to_dict(orient="records"),
+        "weekly": _weekly_summary(daily, BASELINE_AGILITY),
+        "daily": daily_out.where(daily_out.notna(), None).to_dict(orient="records"),
     }
 
 
 @router.get("/pre-post-delta")
 def get_pre_post_delta():
     """Pre→post boxing delta per session, split by sparring vs non-sparring."""
-    df = _load_csv()
+    df = _load_from_bq()
     daily = df[df["category"].isin(["daily_readiness", "daily_agility"])].copy()
     daily = daily[daily["reading_value"].notna() & daily["notes"].notna()]
 
@@ -101,7 +145,7 @@ def get_pre_post_delta():
 @router.get("/load-recommendation")
 def get_load_recommendation():
     """Sparring load recommendation based on last 7 days."""
-    df = _load_csv()
+    df = _load_from_bq()
     daily_r = df[(df["category"] == "daily_readiness") & df["reading_value"].notna()].copy()
     daily_r["date"] = pd.to_datetime(daily_r["date"])
     last7 = daily_r[daily_r["date"] >= daily_r["date"].max() - pd.Timedelta(days=7)]
@@ -133,14 +177,6 @@ def get_load_recommendation():
     }
 
 
-CSV_HEADERS = [
-    "source_image", "category", "date", "week_start", "week_end",
-    "summary_value", "summary_unit", "vs_baseline_pct", "vs_baseline_direction",
-    "reading_timestamp", "reading_value", "reading_unit",
-    "reading_vs_baseline_pct", "reading_vs_baseline_direction", "notes",
-]
-
-
 @router.post("/log")
 def log_pison(
     password: str = Form(...),
@@ -152,10 +188,7 @@ def log_pison(
     agility_accuracy: Optional[float] = Form(None),
     tags: str = Form(""),            # comma-separated tag string
 ):
-    """
-    Append one or two rows to pison_extracted.csv.
-    One row per metric (readiness / agility) if a value was provided.
-    """
+    """Append a Pison reading to BigQuery. One row per metric provided."""
     verify_password(password)
 
     try:
@@ -163,88 +196,33 @@ def log_pison(
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid date/time format")
 
-    # Format timestamp to match existing CSV style: "09:15 am 04/01/2026"
-    timestamp_str = dt.strftime("%-I:%M %p %m/%d/%Y").lower()
-    # e.g. "9:15 am 04/01/2026" — lowercase am/pm to match app format
-
-    rows_to_write = []
-
-    if readiness_ms is not None:
-        rows_to_write.append({
-            "source_image": "manual",
-            "category": "daily_readiness",
-            "date": log_date,
-            "week_start": "",
-            "week_end": "",
-            "summary_value": "",
-            "summary_unit": "",
-            "vs_baseline_pct": "",
-            "vs_baseline_direction": "",
-            "reading_timestamp": timestamp_str,
-            "reading_value": readiness_ms,
-            "reading_unit": "ms",
-            "reading_vs_baseline_pct": "",
-            "reading_vs_baseline_direction": "",
-            "notes": tags,
-        })
-
     has_agility = any(v is not None for v in [agility_score, agility_ms, agility_accuracy])
-    if has_agility:
-        agility_notes_parts = [tags] if tags else []
-        if agility_ms is not None:
-            agility_notes_parts.append(f"agility_ms={agility_ms}")
-        if agility_accuracy is not None:
-            agility_notes_parts.append(f"agility_accuracy={agility_accuracy}")
-        rows_to_write.append({
-            "source_image": "manual",
-            "category": "daily_agility",
-            "date": log_date,
-            "week_start": "",
-            "week_end": "",
-            "summary_value": "",
-            "summary_unit": "",
-            "vs_baseline_pct": "",
-            "vs_baseline_direction": "",
-            "reading_timestamp": timestamp_str,
-            "reading_value": agility_score if agility_score is not None else "",
-            "reading_unit": "/100",
-            "reading_vs_baseline_pct": "",
-            "reading_vs_baseline_direction": "",
-            "notes": ", ".join(agility_notes_parts),
-        })
-
-    if not rows_to_write:
+    if readiness_ms is None and not has_agility:
         raise HTTPException(status_code=422, detail="Provide at least one score value")
 
-    # ── Write to local CSV if available (local dev only) ──
-    if CSV_PATH.exists():
-        import csv as _csv
-        with open(CSV_PATH, "a", newline="") as f:
-            writer = _csv.DictWriter(f, fieldnames=CSV_HEADERS)
-            for row in rows_to_write:
-                writer.writerow(row)
+    agility_notes_parts = [tags] if tags else []
+    if agility_ms is not None:
+        agility_notes_parts.append(f"agility_ms={agility_ms}")
+    if agility_accuracy is not None:
+        agility_notes_parts.append(f"agility_accuracy={agility_accuracy}")
 
-    # ── Write to BigQuery ──
     now = datetime.now(timezone.utc).isoformat()
-    readiness_val = next((r["reading_value"] for r in rows_to_write if r["category"] == "daily_readiness"), None)
-    _agility_raw  = next((r["reading_value"] for r in rows_to_write if r["category"] == "daily_agility"), None)
-    agility_val   = _agility_raw if _agility_raw != "" else None
+    agility_val = agility_score
 
     bq_rows = [{
         "date":             log_date,
         "datetime":         dt.isoformat(),
-        "readiness_ms":     readiness_val,
+        "readiness_ms":     readiness_ms,
         "agility_ms":       agility_ms,
         "agility_accuracy": agility_accuracy,
         "agility_score":    agility_val,
-        "tags":             tags,
+        "tags":             ", ".join(agility_notes_parts) if agility_notes_parts else tags,
         "source":           "manual",
         "ingested_at":      now,
     }]
 
     errors = bq.insert_rows_json(f"{DATASET}.pison_readings", bq_rows)
     if errors:
-        # Log but don't fail — local CSV write already succeeded
-        print(f"[WARN] BigQuery insert errors: {errors}")
+        raise HTTPException(status_code=500, detail=f"BigQuery error: {errors}")
 
-    return {"ok": True, "rows_written": len(rows_to_write)}
+    return {"ok": True}

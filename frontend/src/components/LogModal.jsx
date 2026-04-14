@@ -609,7 +609,7 @@ function NeurableSection({ password }) {
 
       {errMsg && <p style={{ color: '#ef4444', fontSize: '12px' }}>{errMsg}</p>}
       {status === 'ok' && (
-        <p style={{ color: '#22c55e', fontSize: '12px' }}>File uploaded to neurable/data/</p>
+        <p style={{ color: '#22c55e', fontSize: '12px' }}>Uploaded to GCS and processed into neurable_readings.</p>
       )}
 
       <button

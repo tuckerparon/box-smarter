@@ -24,7 +24,6 @@ Frequency bands (normalized total: 1–45 Hz):
   beta  13–30 Hz
   gamma 30–45 Hz
 """
-import os
 import re
 from pathlib import Path
 from typing import Optional, Tuple
@@ -40,35 +39,7 @@ try:
 except AttributeError:
     _trapz = np.trapz
 
-# On Cloud Run the repo is read-only; download GCS files to /tmp instead.
-_LOCAL_DATA = Path(__file__).parents[2] / "neurable" / "data"
-_TMP_DATA   = Path("/tmp/neurable/data")
-DATA_DIR    = _TMP_DATA if os.getenv("K_SERVICE") else _LOCAL_DATA
-
 _FILENAME_RE = re.compile(r"^\d{8}_(pre|post)-boxing_[a-f0-9]{16}\.csv$", re.IGNORECASE)
-
-
-def _sync_from_gcs() -> None:
-    """
-    Download Neurable CSVs from GCS bucket (neurable/ prefix) into DATA_DIR.
-    Runs only when K_SERVICE env var is set (Cloud Run).
-    Skips files already present locally.
-    """
-    if not os.getenv("K_SERVICE"):
-        return
-    try:
-        from gcp import bucket  # type: ignore
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        for blob in bucket.list_blobs(prefix="neurable/"):
-            name = blob.name.split("/")[-1]
-            if not _FILENAME_RE.match(name):
-                continue
-            dest = DATA_DIR / name
-            if not dest.exists():
-                blob.download_to_filename(str(dest))
-                print(f"[eeg_pipeline] downloaded {name} from GCS")
-    except Exception as e:
-        print(f"[eeg_pipeline] GCS sync failed: {e}")
 FS       = 500   # Hz
 N_CH     = 12
 CHANNELS = [f"Ch{i}RawEEG" for i in range(1, N_CH + 1)]
@@ -87,29 +58,6 @@ BANDS = {
     "gamma": (30, 45),
 }
 TOTAL_BAND = (1, 45)
-
-
-# ---------------------------------------------------------------------------
-# File discovery
-# ---------------------------------------------------------------------------
-
-def list_sessions():
-    """
-    Scan DATA_DIR for Neurable CSVs. Returns list of dicts:
-      {date, timing, filepath}
-    File naming: MMDDYYYY_(pre|post)-boxing_<id>.csv
-    """
-    _sync_from_gcs()
-    sessions = []
-    pattern = re.compile(r"^(\d{8})_(pre|post)-boxing_")
-    for path in sorted(DATA_DIR.glob("*.csv")):
-        m = pattern.match(path.name)
-        if not m:
-            continue
-        raw_date, timing = m.group(1), m.group(2)
-        date = pd.to_datetime(raw_date, format="%m%d%Y").date().isoformat()
-        sessions.append({"date": date, "timing": timing, "filepath": path})
-    return sessions
 
 
 # ---------------------------------------------------------------------------
@@ -445,33 +393,16 @@ def process_and_insert(filepath: Path) -> dict:
 
 def process_all_sessions() -> pd.DataFrame:
     """
-    On Cloud Run: read processed metrics from BigQuery neurable_readings.
-    Locally: process all session files in DATA_DIR.
+    Read processed EEG metrics from BigQuery neurable_readings.
     Columns: date, timing, source_file, + all metric keys.
     """
-    if os.getenv("K_SERVICE"):
-        try:
-            from gcp import bq  # type: ignore
-            query = "SELECT * FROM `boxsmart-492022.boxsmart.neurable_readings` ORDER BY date, timing"
-            df = bq.query(query).to_dataframe()
-            if not df.empty:
-                df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
-            return df
-        except Exception as e:
-            print(f"[eeg_pipeline] BQ read failed: {e}")
-            return pd.DataFrame()
-
-    # Local: process from files
-    rows = []
-    for session in list_sessions():
-        try:
-            metrics = process_session(session["filepath"])
-            rows.append({
-                "date":        session["date"],
-                "timing":      session["timing"],
-                "source_file": session["filepath"].name,
-                **metrics,
-            })
-        except Exception as e:
-            print(f"[WARN] Skipping {session['filepath'].name}: {e}")
-    return pd.DataFrame(rows)
+    try:
+        from gcp import bq  # type: ignore
+        query = "SELECT * FROM `boxsmart-492022.boxsmart.neurable_readings` ORDER BY date, timing"
+        df = bq.query(query).to_dataframe()
+        if not df.empty:
+            df["date"] = pd.to_datetime(df["date"]).dt.date.astype(str)
+        return df
+    except Exception as e:
+        print(f"[eeg_pipeline] BQ read failed: {e}")
+        return pd.DataFrame()

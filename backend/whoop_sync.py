@@ -71,12 +71,29 @@ def _refresh_access_token():
 
     new_refresh = tokens.get("refresh_token")
     if new_refresh and new_refresh != refresh_token:
-        env_file = Path(__file__).parent / ".env"
-        lines = env_file.read_text().splitlines()
-        lines = [l for l in lines if not l.startswith("WHOOP_REFRESH_TOKEN=")]
-        lines.append(f"WHOOP_REFRESH_TOKEN={new_refresh}")
-        env_file.write_text("\n".join(lines) + "\n")
         os.environ["WHOOP_REFRESH_TOKEN"] = new_refresh
+        # On Cloud Run: update Secret Manager
+        if os.environ.get("K_SERVICE"):
+            try:
+                from google.cloud import secretmanager
+                sm = secretmanager.SecretManagerServiceClient()
+                sm.add_secret_version(
+                    request={
+                        "parent": "projects/boxsmart-492022/secrets/WHOOP_REFRESH_TOKEN",
+                        "payload": {"data": new_refresh.encode()},
+                    }
+                )
+                print("  ✓ Updated WHOOP_REFRESH_TOKEN in Secret Manager")
+            except Exception as e:
+                print(f"  ⚠ Could not update Secret Manager: {e}")
+        else:
+            # Local: update .env file
+            env_file = Path(__file__).parent / ".env"
+            if env_file.exists():
+                lines = env_file.read_text().splitlines()
+                lines = [l for l in lines if not l.startswith("WHOOP_REFRESH_TOKEN=")]
+                lines.append(f"WHOOP_REFRESH_TOKEN={new_refresh}")
+                env_file.write_text("\n".join(lines) + "\n")
 
 
 def _get_token():

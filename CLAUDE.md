@@ -126,18 +126,18 @@ Each version is visually distinct and self-contained. No cross-references to oth
 
 ---
 
-## Data Ingestion Strategy
+## Data Ingestion
 
-**Phase 1 (MVP): Manual exports**
-- Google Sheet → CSV export
-- Pison → export via app/API
-- Neurable → CSV exports (already named by convention)
-- WHOOP → CSV export from dashboard (optional but recommended for HRV/sleep)
+All data flows through the app's password-protected log modal — no manual CSV exports.
 
-**Phase 2 (later): API automation**
-- Pison API (verify current endpoints)
-- WHOOP API (OAuth, well-documented)
-- Neurable — confirm export/API options with team
+| Source | Ingest method | Storage |
+|--------|--------------|---------|
+| Daily survey | Log modal → `POST /api/survey/log` | BigQuery `training_log` |
+| Pison | Log modal → `POST /api/pison/log` | BigQuery `pison_readings` |
+| Neurable EEG | Log modal upload → `POST /api/eeg/upload` | GCS `boxsmart-raw/neurable/` + BQ `neurable_readings` |
+| WHOOP | `POST /api/whoop/sync` (triggers OAuth API pull) | BigQuery `whoop_daily`, `whoop_sleep`, `whoop_workouts` |
+
+EEG processing runs automatically on upload: file → GCS → pipeline → BigQuery. No local files involved.
 
 ---
 
@@ -152,20 +152,19 @@ Each version is visually distinct and self-contained. No cross-references to oth
 
 ---
 
-## Open Questions (Resolve Before Build)
+## Resolved Questions
 
-1. **WHOOP data** — Include HRV, recovery score, sleep stages? Adds strong neuro-recovery signal.
-2. **Neurable raw format** — Confirm channel count, sampling rate, channel labels from CSV header.
-3. **Pison API status** — Test against current endpoint before building integration.
-4. **THRESHOLD definition** — Needs to be clinically grounded. Define per metric before building recommendation engine.
-5. **Left vs. right hand Pison** — Analyze separately or average? Dominant hand only?
+1. **WHOOP data** — Included. HRV, recovery score, RHR, sleep stages, strain all live in BigQuery.
+2. **Neurable raw format** — 12 channels (Ch1–Ch12), 500 Hz, `EpochTimestamp` column for wall-clock segmentation, `Interpolated` flag for packet loss.
+3. **Pison API** — Not used. Data logged manually through the app.
+4. **Left vs. right hand Pison** — All readings are left hand (non-dominant). No separation needed.
 
 ---
 
-## Stack Suggestions
+## Stack
 
-- **Frontend:** React + Tailwind (theme-switched per route)
-- **Data processing:** Python (MNE for EEG, SciPy/NumPy for stats, pandas for survey)
-- **Charts:** Recharts or Plotly (interactive, supports annotations)
-- **Backend:** FastAPI (serves processed metrics as JSON)
-- **Storage:** Local CSV files → SQLite for processed results (MVP)
+- **Frontend:** React + Vite + Tailwind, deployed on Vercel
+- **Backend:** FastAPI, containerized (Docker), deployed on Google Cloud Run
+- **Data processing:** Python — MNE (EEG), SciPy/NumPy (stats), pandas
+- **Charts:** Recharts (interactive, supports annotations)
+- **Storage:** Google Cloud Storage (raw EEG CSVs) + BigQuery (all processed metrics)

@@ -7,4 +7,7 @@ mne
 scikit-learn
 google-cloud-bigquery
 google-cloud-storage
+db-dtypes
 python-multipart
+google-cloud-secret-manager
+python-dotenv

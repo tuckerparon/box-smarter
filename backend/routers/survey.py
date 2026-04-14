@@ -63,7 +63,7 @@ def log_survey(
         "trained":            trained,
         "sparred":            sparred,
         "fought":             fought,
-        "head_contact_level": head_contact_level if head_contact_level != "None" else None,
+        "head_contact_level": head_contact_level,
         "headache":           headache,
         "creatine":           creatine,
         "caffeine":           caffeine,

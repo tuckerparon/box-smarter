@@ -36,8 +36,6 @@ from whoop_loader import load_cycles, load_sleep, sleep_stage_pct
 from survey_loader import load_survey, CONTACT_MAP
 import eeg_pipeline
 
-_PISON_CSV = Path(__file__).parents[2] / "pison" / "data" / "pison_extracted.csv"
-
 # Literature-derived thresholds
 RECOVERY_THRESHOLD = 33.0   # % — "red" zone in WHOOP; below = do not train hard
 HRV_DECLINE_PCT    = 0.15   # 15% drop from personal baseline triggers caution
@@ -75,11 +73,8 @@ def _load_merged() -> pd.DataFrame:
 
 def _load_pison() -> pd.DataFrame:
     """
-    Load Pison readings in tall format:
-      date (datetime), category (daily_readiness|daily_agility), reading_value (float), notes (str)
-
-    Queries BigQuery pison_readings (wide: readiness_ms, agility_score, tags);
-    falls back to local pison_extracted.csv.
+    Load Pison readings in tall format from BigQuery pison_readings.
+    Returns: date (datetime), category (daily_readiness|daily_agility), reading_value (float), notes (str)
     """
     try:
         from gcp import bq  # type: ignore
@@ -99,16 +94,10 @@ def _load_pison() -> pd.DataFrame:
             return pd.DataFrame(rows)
     except Exception as e:
         print(f"[_load_pison] BQ query failed: {e}")
-
-    # Local CSV fallback
-    if not _PISON_CSV.exists():
         return pd.DataFrame({"date": pd.Series(dtype="datetime64[ns]"),
                              "category": pd.Series(dtype=str),
                              "reading_value": pd.Series(dtype=float),
                              "notes": pd.Series(dtype=str)})
-    df = pd.read_csv(_PISON_CSV)
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    return df
 
 
 def _bootstrap_ci(arr, n_iter=1000, ci=0.90):

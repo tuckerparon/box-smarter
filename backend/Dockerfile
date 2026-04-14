@@ -7,7 +7,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source (no data files — those live in GCS/BigQuery)
-COPY auth.py gcp.py main.py export_static.py ./
+COPY auth.py gcp.py main.py export_static.py whoop_sync.py ./
 COPY routers/ routers/
 COPY processing/ processing/
 COPY db/ db/

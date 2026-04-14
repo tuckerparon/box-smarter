@@ -1,61 +1,61 @@
 """
 Daily survey loader.
-Source: survey/head_contact_study.csv
+Source: BigQuery (boxsmart.training_log)
 
 Notes:
-- BACKFILL rows: early camp days logged retroactively without detail — treated as NaN
-- Future rows: pre-filled calendar with all NaN — filtered out
-- head_contact_level: CSV uses 'None'/'Low'/'Medium'/'High' (not 'none'/'low'/'med'/'high')
-- caffeine: stored as entered (0, 0.5, 0.6, 1) — unit ambiguous (CLAUDE.md says mg,
-  but values suggest cups; stored as-is for now)
+- head_contact_level: 'None'/'Low'/'Medium'/'High'
+- caffeine: stored as mg
+- endurance: perceived endurance rating (1–5 scale), N/A → NaN
 """
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 
-DATA_DIR = Path(__file__).parents[2] / "survey"
-
 CONTACT_MAP = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
+
+_EMPTY_COLS = ["date", "day_of_week", "trained", "sparred", "fought",
+               "head_contact_level", "headache", "creatine", "caffeine", "endurance"]
+
+
+def _normalize(df: pd.DataFrame, filled_only: bool) -> pd.DataFrame:
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+
+    for col in ["trained", "sparred", "fought", "headache", "creatine"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+
+    if "caffeine" in df.columns:
+        df["caffeine"] = pd.to_numeric(df["caffeine"], errors="coerce")
+
+    if "endurance" in df.columns:
+        df["endurance"] = pd.to_numeric(df["endurance"], errors="coerce")
+
+    if "head_contact_level" in df.columns:
+        df["head_contact_level"] = df["head_contact_level"].replace({"N/A": pd.NA, "": pd.NA})
+
+    if filled_only:
+        df = df[df["trained"].notna()].reset_index(drop=True)
+
+    return df
 
 
 def load_survey(filled_only: bool = True) -> pd.DataFrame:
     """
-    Load and normalize all survey entries.
+    Load and normalize all survey entries from BigQuery (falls back to CSV).
 
-    filled_only=True (default): returns only rows where data has actually been entered
-    (excludes BACKFILL rows and future/blank rows).
+    filled_only=True (default): returns only rows where data has been entered.
 
-    Columns returned:
-      date (date), day_of_week (str), trained (Int64), sparred (Int64),
-      fought (Int64), head_contact_level (str|None), headache (Int64),
-      creatine (Int64), caffeine (float|None)
+    Columns: date, day_of_week, trained, sparred, fought, head_contact_level,
+             headache, creatine, caffeine, endurance
     """
-    if not (DATA_DIR / "head_contact_study.csv").exists():
-        return pd.DataFrame(columns=["date","day_of_week","trained","sparred","fought",
-                                      "head_contact_level","headache","creatine","caffeine"])
-    df = pd.read_csv(DATA_DIR / "head_contact_study.csv")
-
-    df["date"] = pd.to_datetime(df["date"], format="%m/%d/%Y").dt.date
-
-    # Replace BACKFILL sentinel with NaN
-    for col in ["trained", "sparred", "fought", "headache", "creatine", "caffeine"]:
-        df[col] = df[col].replace("BACKFILL", pd.NA)
-
-    # Normalize head_contact_level — 'N/A' also becomes NaN
-    df["head_contact_level"] = df["head_contact_level"].replace("N/A", pd.NA)
-
-    # Cast binary columns to nullable integer
-    for col in ["trained", "sparred", "fought", "headache", "creatine"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
-
-    df["caffeine"] = pd.to_numeric(df["caffeine"], errors="coerce")
-
-    if filled_only:
-        # Keep only rows where 'trained' has been entered (not BACKFILL, not future blank)
-        df = df[df["trained"].notna()].reset_index(drop=True)
-
-    return df
+    try:
+        from gcp import bq  # type: ignore
+        query = "SELECT * FROM `boxsmart-492022.boxsmart.training_log` ORDER BY date"
+        df = bq.query(query).to_dataframe()
+        return _normalize(df, filled_only)
+    except Exception as e:
+        print(f"[survey_loader] BQ query failed: {e}")
+        return pd.DataFrame(columns=_EMPTY_COLS)
 
 
 def weekly_contact_score(df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
