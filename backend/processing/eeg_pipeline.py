@@ -75,8 +75,10 @@ def load_session(filepath: Path):
         interp_pct   float — overall fraction interpolated
     """
     df = pd.read_csv(filepath)
+    # Drop pre-roll rows with malformed timestamps (e.g. "00:00:00.0-9" before counter reset)
+    df = df[df["EpochTimestamp"].str.match(r"^\d{2}:\d{2}:\d{2}\.\d+$")].reset_index(drop=True)
     df["t"] = pd.to_timedelta(df["EpochTimestamp"])
-    df = df[df["t"] <= pd.Timedelta(seconds=120)].reset_index(drop=True)
+    df = df[(df["t"] >= pd.Timedelta(0)) & (df["t"] <= pd.Timedelta(seconds=120))].reset_index(drop=True)
 
     interp_mask = (df["Interpolated"] == "yes").values
     interp_pct  = float(interp_mask.mean())

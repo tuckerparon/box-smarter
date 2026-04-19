@@ -141,7 +141,12 @@ def get_ab_sparring():  # noqa: C901
     df["sparred"] = df["sparred"].fillna(0).astype(int)
     df["date_dt"] = pd.to_datetime(df["date"].astype(str))
 
-    sparring_dates = set(df[df["sparred"] == 1]["date_dt"].dt.strftime("%Y-%m-%d"))
+    # Derive sparring dates directly from survey — not from the WHOOP-joined df,
+    # which excludes sparring days where WHOOP sync failed or had no cycle data.
+    _survey = load_survey()
+    sparring_dates = set(
+        pd.to_datetime(_survey[_survey["sparred"] == 1]["date"].astype(str)).dt.strftime("%Y-%m-%d")
+    )
 
     def _compare_metric(spar, nospar, label):
         if len(spar) < 2 or len(nospar) < 2:
@@ -321,6 +326,77 @@ def get_ab_sparring():  # noqa: C901
     })
 
 
+# ---------------------------------------------------------------------------
+# Debug: sparring day coverage
+# ---------------------------------------------------------------------------
+
+@router.get("/debug-sparring-coverage")
+def get_debug_sparring_coverage():
+    """
+    For each sparring day in the training log, report which device data exists
+    and whether pre/post readings are present. Useful for diagnosing low n counts.
+    """
+    df = _load_merged()
+    df["sparred"] = df["sparred"].fillna(0).astype(int)
+    df["date_dt"] = pd.to_datetime(df["date"].astype(str))
+    sparring_dates = sorted(df[df["sparred"] == 1]["date_dt"].dt.strftime("%Y-%m-%d").tolist())
+
+    # ── Pison coverage ───────────────────────────────────────────────────────
+    pison_df = _load_pison()
+    pison_df["date_str"] = pison_df["date"].dt.strftime("%Y-%m-%d")
+    notes_lower = pison_df["notes"].fillna("").str.lower()
+    pison_df["is_pre"]  = notes_lower.str.contains("pre-boxing|pre boxing|pre-sparring|pre sparring")
+    pison_df["is_post"] = notes_lower.str.contains("post-boxing|post boxing|post-sparring|post sparring")
+
+    pison_coverage = {}
+    for d in sparring_dates:
+        rows = pison_df[pison_df["date_str"] == d]
+        has_readiness = bool((rows["category"] == "daily_readiness").any())
+        has_agility   = bool((rows["category"] == "daily_agility").any())
+        has_pre       = bool(rows["is_pre"].any())
+        has_post      = bool(rows["is_post"].any())
+        untagged_count = int((~rows["is_pre"] & ~rows["is_post"]).sum())
+        all_tags = sorted(set(rows["notes"].dropna().tolist()))
+        pison_coverage[d] = {
+            "has_readiness": has_readiness,
+            "has_agility":   has_agility,
+            "has_pre_tag":   has_pre,
+            "has_post_tag":  has_post,
+            "counts_for_delta": has_pre and has_post,
+            "untagged_readings": untagged_count,
+            "tags_found": all_tags,
+        }
+
+    # ── EEG coverage ─────────────────────────────────────────────────────────
+    eeg_df = eeg_pipeline.process_all_sessions()
+    eeg_coverage = {}
+    for d in sparring_dates:
+        if eeg_df.empty:
+            eeg_coverage[d] = {"has_pre": False, "has_post": False, "counts_for_delta": False}
+            continue
+        rows = eeg_df[eeg_df["date"] == d]
+        has_pre  = bool((rows["timing"] == "pre").any())
+        has_post = bool((rows["timing"] == "post").any())
+        eeg_coverage[d] = {
+            "has_pre":  has_pre,
+            "has_post": has_post,
+            "counts_for_delta": has_pre and has_post,
+        }
+
+    summary = {
+        "total_sparring_days": len(sparring_dates),
+        "pison_delta_eligible": sum(1 for v in pison_coverage.values() if v["counts_for_delta"]),
+        "pison_any_data":       sum(1 for v in pison_coverage.values() if v["has_readiness"] or v["has_agility"]),
+        "eeg_delta_eligible":   sum(1 for v in eeg_coverage.values() if v["counts_for_delta"]),
+        "eeg_any_data":         sum(1 for v in eeg_coverage.values() if v["has_pre"] or v["has_post"]),
+    }
+
+    return {
+        "summary": summary,
+        "sparring_dates": sparring_dates,
+        "pison": pison_coverage,
+        "eeg": eeg_coverage,
+    }
 
 
 # ---------------------------------------------------------------------------

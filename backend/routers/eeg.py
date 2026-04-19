@@ -38,10 +38,21 @@ async def upload_eeg(
 
     data = await file.read()
 
-    # Upload to GCS
-    blob = bucket.blob(f"neurable/{filename}")
-    if blob.exists():
+    # Check BQ first — GCS may have the file without a corresponding BQ row (partial failure)
+    try:
+        from gcp import bq  # type: ignore
+        already_in_bq = bool(list(bq.query(
+            f"SELECT 1 FROM `boxsmart-492022.boxsmart.neurable_readings`"
+            f" WHERE source_file = '{filename}' LIMIT 1"
+        ).result()))
+    except Exception:
+        already_in_bq = False
+
+    if already_in_bq:
         raise HTTPException(status_code=409, detail=f"File already exists: {filename}")
+
+    # Upload to GCS (overwrite silently if it was a prior partial failure)
+    blob = bucket.blob(f"neurable/{filename}")
     blob.upload_from_string(data, content_type="text/csv")
 
     # Process and insert to BigQuery

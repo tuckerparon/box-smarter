@@ -323,6 +323,24 @@ function buildH1Interpretation(data) {
     }
   }
 
+  const ag = data.pison?.agility
+  if (ag) {
+    const sp = ag.delta_sparring?.mean ?? ag.sparring?.mean
+    const ns = ag.delta_non_sparring?.mean ?? ag.non_sparring?.mean
+    const isDelta = ag.delta_sparring?.mean != null
+    if (sp != null && ns != null) {
+      const spStr = `${sp >= 0 ? '+' : ''}${sp.toFixed(1)}`
+      const nsStr = `${ns >= 0 ? '+' : ''}${ns.toFixed(1)}`
+      const largerOnSparring = sp > ns
+      lines.push(
+        `Agility/go-no-go score ${isDelta ? `delta: ${spStr} on sparring vs ${nsStr} on non-sparring` : `was ${sp > ns ? 'higher' : 'lower'} on sparring days (${sp.toFixed(1)} vs ${ns.toFixed(1)})`} — ${largerOnSparring
+          ? 'paradoxical improvement in inhibitory control speed after contact. Concurrent alpha suppression and agility elevation is consistent with acute subcortical arousal: fight-or-flight adrenaline temporarily boosts motor speed while cortical processing is suppressed. This cortical–subcortical dissociation has been documented in acute neurological stress states and warrants monitoring over the camp.'
+          : 'no differential agility improvement by session type.'
+        }`
+      )
+    }
+  }
+
   if (!lines.length) return null
   lines.push(supportCount >= 2
     ? 'Overall: early evidence supports H1 — contact sessions produce measurable acute suppression across both EEG and ENG domains. Statistical confidence is limited by small n; interpret directionally.'
