@@ -45,7 +45,9 @@ def _to_nullable_int(series: pd.Series) -> pd.Series:
 
 def _normalize(df: pd.DataFrame, filled_only: bool) -> pd.DataFrame:
     df = df.copy()
-    df["date"] = pd.to_datetime(df["date"]).dt.date
+    # errors='coerce' turns unparseable/out-of-range dates into NaT instead of crashing.
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+    df = df[df["date"].notna()].reset_index(drop=True)
 
     for col in ["trained", "sparred", "fought", "headache", "creatine"]:
         if col in df.columns:
