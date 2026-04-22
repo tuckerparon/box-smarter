@@ -15,10 +15,30 @@ router = APIRouter()
 
 @router.get("/")
 def get_survey():
-    """All daily survey entries."""
-    df = load_survey()
+    """All daily survey entries (includes rows where 'trained' is null)."""
+    df = load_survey(filled_only=False)
     df["date"] = df["date"].astype(str)
     return df.where(df.notna(), None).to_dict(orient="records")
+
+
+@router.get("/debug-raw")
+def get_survey_debug_raw():
+    """Debug: return raw BigQuery rows without normalization, plus row count."""
+    try:
+        from gcp import bq  # type: ignore
+        query = "SELECT * FROM `boxsmart-492022.boxsmart.training_log` ORDER BY date LIMIT 10"
+        df = bq.query(query).to_dataframe()
+        info = {
+            "row_count": len(df),
+            "columns": list(df.columns),
+            "dtypes": {c: str(df[c].dtype) for c in df.columns},
+            "trained_sample": df["trained"].head(5).tolist() if "trained" in df.columns else "MISSING",
+            "sparred_sample": df["sparred"].head(5).tolist() if "sparred" in df.columns else "MISSING",
+        }
+        rows = df.astype(str).where(df.notna(), None).to_dict(orient="records")
+        return {"info": info, "rows": rows}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @router.get("/contact-score")

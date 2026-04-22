@@ -57,7 +57,9 @@ def _load_merged() -> pd.DataFrame:
     try:
         cycles = load_cycles()
         sleep  = sleep_stage_pct(load_sleep())
-        survey = load_survey()
+        # filled_only=False: include all logged days even if 'trained' wasn't filled,
+        # so sparring/head-contact data is never silently dropped.
+        survey = load_survey(filled_only=False)
 
         cycles["date"] = pd.to_datetime(cycles["date"].astype(str))
         sleep["date"]  = pd.to_datetime(sleep["date"].astype(str))
@@ -141,9 +143,9 @@ def get_ab_sparring():  # noqa: C901
     df["sparred"] = df["sparred"].fillna(0).astype(int)
     df["date_dt"] = pd.to_datetime(df["date"].astype(str))
 
-    # Derive sparring dates directly from survey — not from the WHOOP-joined df,
-    # which excludes sparring days where WHOOP sync failed or had no cycle data.
-    _survey = load_survey()
+    # Derive sparring dates directly from survey — filled_only=False so days where
+    # 'trained' wasn't logged but 'sparred'=1 are still captured.
+    _survey = load_survey(filled_only=False)
     sparring_dates = set(
         pd.to_datetime(_survey[_survey["sparred"] == 1]["date"].astype(str)).dt.strftime("%Y-%m-%d")
     )

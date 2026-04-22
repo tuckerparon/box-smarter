@@ -17,12 +17,39 @@ _EMPTY_COLS = ["date", "day_of_week", "trained", "sparred", "fought",
                "head_contact_level", "headache", "creatine", "caffeine", "endurance"]
 
 
+def _to_nullable_int(series: pd.Series) -> pd.Series:
+    """
+    Safely coerce a series to nullable Int64, handling bool/float/int/string types
+    that BigQuery may return depending on schema and pyarrow version.
+    """
+    def _coerce(x):
+        try:
+            if x is None:
+                return pd.NA
+            if isinstance(x, float) and pd.isna(x):
+                return pd.NA
+            if hasattr(x, '__class__') and x.__class__.__name__ in ('NAType', 'NA'):
+                return pd.NA
+            return int(x)
+        except (ValueError, TypeError):
+            return pd.NA
+
+    try:
+        # Fast path: standard pd.to_numeric works for most cases
+        result = pd.to_numeric(series, errors="coerce").astype("Int64")
+        return result
+    except (TypeError, ValueError):
+        # Slow path: cell-by-cell coercion for unusual dtypes (e.g. BooleanDtype from pyarrow)
+        return pd.array([_coerce(x) for x in series], dtype="Int64")
+
+
 def _normalize(df: pd.DataFrame, filled_only: bool) -> pd.DataFrame:
+    df = df.copy()
     df["date"] = pd.to_datetime(df["date"]).dt.date
 
     for col in ["trained", "sparred", "fought", "headache", "creatine"]:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+            df[col] = _to_nullable_int(df[col])
 
     if "caffeine" in df.columns:
         df["caffeine"] = pd.to_numeric(df["caffeine"], errors="coerce")
@@ -34,14 +61,15 @@ def _normalize(df: pd.DataFrame, filled_only: bool) -> pd.DataFrame:
         df["head_contact_level"] = df["head_contact_level"].replace({"N/A": pd.NA, "": pd.NA})
 
     if filled_only:
-        df = df[df["trained"].notna()].reset_index(drop=True)
+        if "trained" in df.columns:
+            df = df[df["trained"].notna()].reset_index(drop=True)
 
     return df
 
 
 def load_survey(filled_only: bool = True) -> pd.DataFrame:
     """
-    Load and normalize all survey entries from BigQuery (falls back to CSV).
+    Load and normalize all survey entries from BigQuery.
 
     filled_only=True (default): returns only rows where data has been entered.
 
@@ -54,7 +82,7 @@ def load_survey(filled_only: bool = True) -> pd.DataFrame:
         df = bq.query(query).to_dataframe()
         return _normalize(df, filled_only)
     except Exception as e:
-        print(f"[survey_loader] BQ query failed: {e}")
+        print(f"[survey_loader] load_survey failed (filled_only={filled_only}): {e}")
         return pd.DataFrame(columns=_EMPTY_COLS)
 
 
@@ -67,7 +95,7 @@ def weekly_contact_score(df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     Returns DataFrame with columns: year, week, contact_score, n_days
     """
     if df is None:
-        df = load_survey()
+        df = load_survey(filled_only=False)
 
     df = df.copy()
     df["contact_numeric"] = df["head_contact_level"].map(CONTACT_MAP)
@@ -89,7 +117,7 @@ def weekly_contact_score(df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
 def sparring_days(df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """Return rows where sparred == 1."""
     if df is None:
-        df = load_survey()
+        df = load_survey(filled_only=False)
     return df[df["sparred"] == 1].reset_index(drop=True)
 
 
