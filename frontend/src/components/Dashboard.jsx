@@ -488,9 +488,12 @@ function MetricRow({ metricKey, sparring, nonSparring, showStats, pValue, signif
   return (
     <div className="py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold flex items-center" style={{ color: T.subtext, fontFamily: T.sans }}>
+        <span className="text-xs font-semibold flex items-center gap-1.5" style={{ color: T.subtext, fontFamily: T.sans }}>
           {def.label}
           <Info {...def.info} />
+          <span className="font-normal" style={{ color: T.dimText }}>
+            {def.higherBetter ? '↑ better' : '↓ better'}
+          </span>
         </span>
         {showStats && sparring?.cohens_d != null && <CohensBadge d={sparring.cohens_d} />}
       </div>
@@ -514,7 +517,6 @@ function MetricRow({ metricKey, sparring, nonSparring, showStats, pValue, signif
       {pValue != null && (
         <p className="text-xs mt-1" style={{ color: pValue < 0.05 ? '#9A4F00' : T.dimText, fontFamily: T.sans }}>
           Mann-Whitney U p = {pValue}{significant ? ' ★' : ''}
-          {def.higherBetter ? ' · higher = better' : ' · lower = better'}
         </p>
       )}
     </div>
@@ -530,7 +532,12 @@ function ENGRow({ label, sparring, nonSparring, lowerBetter, fmt, pValue, cohens
   return (
     <div className="py-3" style={{ borderBottom: `1px solid ${T.border}` }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold" style={{ color: T.subtext, fontFamily: T.sans }}>{label}</span>
+        <span className="text-xs font-semibold flex items-center gap-1.5" style={{ color: T.subtext, fontFamily: T.sans }}>
+          {label}
+          <span className="font-normal" style={{ color: T.dimText }}>
+            {lowerBetter ? '↓ better' : '↑ better'}
+          </span>
+        </span>
         {cohensD != null && <CohensBadge d={cohensD} />}
       </div>
       {[
@@ -553,7 +560,6 @@ function ENGRow({ label, sparring, nonSparring, lowerBetter, fmt, pValue, cohens
       {pValue != null && (
         <p className="text-xs mt-1" style={{ color: pValue < 0.05 ? '#9A4F00' : T.dimText, fontFamily: T.sans }}>
           Mann-Whitney U p = {pValue}{significant ? ' ★' : ''}
-          {lowerBetter ? ' · lower = faster (better)' : ' · higher = better'}
         </p>
       )}
     </div>
@@ -634,7 +640,7 @@ function H1Charts({ data, activeView, onViewChange }) {
                       label="Readiness (reaction time)"
                       sparring={sp}
                       nonSparring={ns}
-                      lowerBetter={activeView !== 'delta'}
+                      lowerBetter={true}
                       fmt={v => v != null ? `${v.toFixed(0)} ms` : '—'}
                       pValue={pison.readiness_ms.p_value}
                       cohensD={activeView === 'avg' ? pison.readiness_ms.sparring?.cohens_d : null}
