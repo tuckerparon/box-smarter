@@ -511,7 +511,7 @@ function MetricRow({ metricKey, sparring, nonSparring, showStats, pValue, signif
           </span>
         </div>
       ))}
-      {showStats && pValue != null && (
+      {pValue != null && (
         <p className="text-xs mt-1" style={{ color: pValue < 0.05 ? '#9A4F00' : T.dimText, fontFamily: T.sans }}>
           Mann-Whitney U p = {pValue}{significant ? ' ★' : ''}
           {def.higherBetter ? ' · higher = better' : ' · lower = better'}
@@ -636,9 +636,9 @@ function H1Charts({ data, activeView, onViewChange }) {
                       nonSparring={ns}
                       lowerBetter={activeView !== 'delta'}
                       fmt={v => v != null ? `${v.toFixed(0)} ms` : '—'}
-                      pValue={activeView === 'avg' ? pison.readiness_ms.p_value : null}
+                      pValue={pison.readiness_ms.p_value}
                       cohensD={activeView === 'avg' ? pison.readiness_ms.sparring?.cohens_d : null}
-                      significant={activeView === 'avg' ? pison.readiness_ms.significant : false}
+                      significant={pison.readiness_ms.significant ?? false}
                     />
                   )
                 })()}
@@ -651,9 +651,9 @@ function H1Charts({ data, activeView, onViewChange }) {
                       nonSparring={ns}
                       lowerBetter={false}
                       fmt={v => v != null ? v.toFixed(1) : '—'}
-                      pValue={activeView === 'avg' ? pison.agility.p_value : null}
+                      pValue={pison.agility.p_value}
                       cohensD={activeView === 'avg' ? pison.agility.sparring?.cohens_d : null}
-                      significant={activeView === 'avg' ? pison.agility.significant : false}
+                      significant={pison.agility.significant ?? false}
                     />
                   )
                 })()}
@@ -685,8 +685,8 @@ function H1Charts({ data, activeView, onViewChange }) {
                     sparring={sp}
                     nonSparring={ns}
                     showStats={activeView === 'avg'}
-                    pValue={activeView === 'avg' ? eeg[k].p_value : null}
-                    significant={activeView === 'avg' ? eeg[k].significant : false}
+                    pValue={eeg[k].p_value}
+                    significant={eeg[k].significant ?? false}
                   />
                 )
               })
