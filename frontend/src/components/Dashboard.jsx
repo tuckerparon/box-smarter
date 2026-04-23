@@ -318,7 +318,7 @@ function buildH1Interpretation(data) {
       if (support) supportCount++
       const d = rt.cohens_d
       lines.push(
-        `Reaction time (ENG) ${isDelta ? `delta: ${sp >= 0 ? '+' : ''}${sp.toFixed(0)} ms on sparring vs ${ns >= 0 ? '+' : ''}${ns.toFixed(0)} ms on non-sparring` : `was ${sp > ns ? 'slower' : 'faster'} on sparring days (${sp.toFixed(0)} ms vs ${ns.toFixed(0)} ms)`}${d != null ? `, d = ${Math.abs(d).toFixed(2)}` : ''} — ${support ? 'elevated neuromuscular cost on contact days' : 'no reaction time difference by session type'}.`
+        `Reaction time (EMG) ${isDelta ? `delta: ${sp >= 0 ? '+' : ''}${sp.toFixed(0)} ms on sparring vs ${ns >= 0 ? '+' : ''}${ns.toFixed(0)} ms on non-sparring` : `was ${sp > ns ? 'slower' : 'faster'} on sparring days (${sp.toFixed(0)} ms vs ${ns.toFixed(0)} ms)`}${d != null ? `, d = ${Math.abs(d).toFixed(2)}` : ''} — ${support ? 'elevated neuromuscular cost on contact days' : 'no reaction time difference by session type'}.`
       )
     }
   }
@@ -343,7 +343,7 @@ function buildH1Interpretation(data) {
 
   if (!lines.length) return null
   lines.push(supportCount >= 2
-    ? 'Overall: early evidence supports H1 — contact sessions produce measurable acute suppression across both EEG and ENG domains. Statistical confidence is limited by small n; interpret directionally.'
+    ? 'Overall: early evidence supports H1 — contact sessions produce measurable acute suppression across both EEG and EMG domains. Statistical confidence is limited by small n; interpret directionally.'
     : 'Overall: findings are mixed. Continue collecting sessions to reach adequate statistical power.'
   )
   return lines
@@ -516,14 +516,14 @@ function MetricRow({ metricKey, sparring, nonSparring, showStats, pValue, signif
       ))}
       {pValue != null && (
         <p className="text-xs mt-1" style={{ color: pValue < 0.05 ? '#9A4F00' : T.dimText, fontFamily: T.sans }}>
-          Mann-Whitney U p = {pValue}{significant ? ' ★' : ''}
+          p = {pValue}{significant ? ' ★' : ''}
         </p>
       )}
     </div>
   )
 }
 
-function ENGRow({ label, sparring, nonSparring, lowerBetter, fmt, pValue, cohensD, significant }) {
+function EMGRow({ label, sparring, nonSparring, lowerBetter, fmt, pValue, cohensD, significant }) {
   const sp  = sparring?.mean
   const ns  = nonSparring?.mean
   if (sp == null && ns == null) return null
@@ -559,14 +559,14 @@ function ENGRow({ label, sparring, nonSparring, lowerBetter, fmt, pValue, cohens
       ))}
       {pValue != null && (
         <p className="text-xs mt-1" style={{ color: pValue < 0.05 ? '#9A4F00' : T.dimText, fontFamily: T.sans }}>
-          Mann-Whitney U p = {pValue}{significant ? ' ★' : ''}
+          p = {pValue}{significant ? ' ★' : ''}
         </p>
       )}
     </div>
   )
 }
 
-// ─── H1: Side-by-side ENG + EEG cards ────────────────────────────────────────
+// ─── H1: Side-by-side EMG + EEG cards ────────────────────────────────────────
 
 const H1_VIEWS = [
   { key: 'delta', label: 'Δ Delta', desc: 'post − pre per session' },
@@ -591,7 +591,7 @@ function H1Charts({ data, activeView, onViewChange }) {
   const pison = data.pison ?? {}
 
   const hasEEG = Object.keys(eeg).some(k => eeg[k]?.sparring?.mean != null)
-  const hasENG = Object.keys(pison).some(k => pison[k]?.sparring?.mean != null)
+  const hasEMG = Object.keys(pison).some(k => pison[k]?.sparring?.mean != null)
 
   return (
     <div>
@@ -618,25 +618,25 @@ function H1Charts({ data, activeView, onViewChange }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* ENG */}
+        {/* EMG */}
         <Card className="p-5">
           <div className="flex items-center justify-between mb-1">
             <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: T.accent3, fontFamily: T.sans, letterSpacing: '0.08em' }}>
-              ENG — Pison
+              EMG — Pison
             </h3>
             <span className="text-xs" style={{ color: T.dimText, fontFamily: T.sans }}>Neuromuscular</span>
           </div>
           <p className="text-xs mb-3" style={{ color: T.dimText, fontFamily: T.sans }}>
             Sparring vs non-sparring · Mann-Whitney U
           </p>
-          {!hasENG
+          {!hasEMG
             ? <p className="text-xs py-6 text-center" style={{ color: T.dimText, fontFamily: T.sans }}>No Pison data yet.</p>
             : (
               <>
                 {pison.readiness_ms && (() => {
                   const { sparring: sp, nonSparring: ns } = getViewPair(pison.readiness_ms, activeView)
                   return (
-                    <ENGRow
+                    <EMGRow
                       label="Readiness (reaction time)"
                       sparring={sp}
                       nonSparring={ns}
@@ -651,7 +651,7 @@ function H1Charts({ data, activeView, onViewChange }) {
                 {pison.agility && (() => {
                   const { sparring: sp, nonSparring: ns } = getViewPair(pison.agility, activeView)
                   return (
-                    <ENGRow
+                    <EMGRow
                       label="Agility (go/no-go score)"
                       sparring={sp}
                       nonSparring={ns}
@@ -706,8 +706,8 @@ function H1Charts({ data, activeView, onViewChange }) {
 // ─── RQ1: Longitudinal chart ──────────────────────────────────────────────────
 
 const LONG_METRICS = [
-  { key: 'readiness_ms',      label: 'Readiness (ms)',    color: T.accent,  group: 'ENG', inverted: true },
-  { key: 'agility',           label: 'Agility (/100)',    color: T.accent3, group: 'ENG', inverted: false },
+  { key: 'readiness_ms',      label: 'Readiness (ms)',    color: T.accent,  group: 'EMG', inverted: true },
+  { key: 'agility',           label: 'Agility (/100)',    color: T.accent3, group: 'EMG', inverted: false },
   { key: 'alpha_reactivity',  label: 'Alpha Reactivity',  color: T.accent2, group: 'EEG', inverted: false },
   { key: 'alpha_theta_ratio', label: 'Alpha/Theta',       color: T.accent2, group: 'EEG', inverted: false },
   { key: 'rel_alpha_eo',      label: 'Rel. Alpha EO',     color: '#5C9E7A', group: 'EEG', inverted: false },
@@ -739,7 +739,7 @@ function LongitudinalChart({ data }) {
     <Card className="p-5 space-y-4">
       {/* Metric toggle */}
       <div>
-        {['ENG', 'EEG'].map(group => (
+        {['EMG', 'EEG'].map(group => (
           <div key={group} className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-xs font-semibold w-8" style={{ color: T.dimText, fontFamily: T.sans }}>{group}</span>
             {LONG_METRICS.filter(m => m.group === group).map(m => (
@@ -1149,7 +1149,7 @@ export default function Dashboard() {
                 Tucker Paron &nbsp;·&nbsp; Jan 15 – May 7, 2026 &nbsp;·&nbsp; Rock 'N Rumble XV Boston
               </p>
               <p className="text-xs mt-1" style={{ color: T.dimText, fontFamily: T.sans }}>
-                EEG (Neurable MW75) · ENG (Pison) · Daily Survey · n=1 longitudinal, single-subject
+                EEG (Neurable MW75) · EMG (Pison) · Daily Survey · n=1 longitudinal, single-subject
               </p>
             </div>
             <a
@@ -1170,7 +1170,7 @@ export default function Dashboard() {
         <section className="mb-12">
           <SectionLabel tag="H1" tagColor={T.accent}>
             Sparring sessions will produce greater acute biomarker suppression than non-contact training
-            sessions, across both EEG (alpha/theta ratio) and ENG (reaction time), measured within
+            sessions, across both EEG (alpha/theta ratio) and EMG (reaction time), measured within
             30 minutes pre- and post-session.
           </SectionLabel>
 
@@ -1217,15 +1217,15 @@ export default function Dashboard() {
         <section className="mb-12">
           <SectionLabel tag="RQ2" tagColor="#7B5800">
             Are there strong correlates between biomarker changes and same-day head contact level or
-            reported headache? How do EEG and ENG measures co-vary across the camp?
+            reported headache? How do EEG and EMG measures co-vary across the camp?
           </SectionLabel>
 
           <h2 className="text-sm font-semibold mb-4" style={{ fontFamily: T.serif, color: T.text }}>
             Cross-Variable Correlation Matrix
             <Info
               title="Spearman ρ correlation matrix"
-              formula="Same Day Δ: correlates post−pre session change in EEG/ENG with same-day head contact & headache\nNext Day Pre: correlates previous day's survey with next morning's pre-session EEG baseline\nSpearman ρ — handles ordinal (head contact) × continuous, appropriate for small n"
-              citation="Spearman ρ makes no assumption about data distribution and handles ordinal variables (head contact scale) mixed with continuous EEG/ENG measures — appropriate for this dataset's small n and non-normal distributions."
+              formula="Same Day Δ: correlates post−pre session change in EEG/EMG with same-day head contact & headache\nNext Day Pre: correlates previous day's survey with next morning's pre-session EEG baseline\nSpearman ρ — handles ordinal (head contact) × continuous, appropriate for small n"
+              citation="Spearman ρ makes no assumption about data distribution and handles ordinal variables (head contact scale) mixed with continuous EEG/EMG measures — appropriate for this dataset's small n and non-normal distributions."
             />
           </h2>
 
