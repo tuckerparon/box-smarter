@@ -27,7 +27,7 @@ export default function AuthGate({ children }) {
         <div className="flex flex-col items-center gap-2">
           <span className="text-4xl">🥊</span>
           <h1 className="text-xl font-semibold text-[#1A1A1A] tracking-tight">BoxSmart</h1>
-          <p className="text-sm text-gray-500 text-center">This site is private until after the fight.<br />Enter the password to continue.</p>
+          <p className="text-sm text-gray-500 text-center">Enter the password to continue.</p>
         </div>
         <form onSubmit={handleSubmit} className="w-full flex flex-col gap-3">
           <input
